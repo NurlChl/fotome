@@ -55,16 +55,6 @@ export async function POST(req: NextRequest) {
           },
         },
         {
-          $addFields: {
-            score: { $meta: 'vectorSearchScore' },
-          },
-        },
-        {
-          $match: {
-            score: { $gte: threshold },
-          },
-        },
-        {
           $lookup: {
             from: 'photos',
             localField: 'photoId',
@@ -84,8 +74,8 @@ export async function POST(req: NextRequest) {
           $project: {
             _id: 1,
             photoId: 1,
-            score: 1,
             boundingBox: 1,
+            descriptor: 1,
             photo: {
               _id: 1,
               watermarkedUrl: 1,
@@ -95,10 +85,49 @@ export async function POST(req: NextRequest) {
             },
           },
         },
-        {
-          $sort: { score: -1 },
-        },
       ]);
+
+      // Filter and calculate exact Euclidean distance if Atlas Vector Search returned results
+      if (matchingFaces.length > 0) {
+        const maxDistance = threshold ?? 0.60;
+        const typedFaces = matchingFaces as unknown as {
+          _id: mongoose.Types.ObjectId;
+          photoId: mongoose.Types.ObjectId;
+          descriptor: number[];
+          boundingBox: { x: number; y: number; width: number; height: number };
+          photo: PopulatedPhoto;
+        }[];
+
+        const mappedResults: FaceSearchResult[] = typedFaces
+          .map((face) => {
+            const dist = euclideanDistance(descriptor, face.descriptor);
+            const score = Math.max(0, 1 - dist);
+            return {
+              _id: face._id,
+              photoId: face.photoId,
+              score,
+              distance: dist,
+              boundingBox: face.boundingBox,
+              photo: face.photo,
+            };
+          })
+          .filter((r) => r.distance <= maxDistance)
+          .sort((a, b) => a.distance - b.distance);
+
+        matchingFaces = deduplicateByPhotoId(mappedResults);
+      }
+
+      // Smart Fallback: If Vector Search returns 0 results, check if descriptors exist for this event.
+      // If there are descriptors but Vector Search matched nothing, it suggests the Atlas Index is missing or inactive.
+      if (matchingFaces.length === 0) {
+        const totalInEvent = await FaceDescriptor.countDocuments({
+          eventId: new mongoose.Types.ObjectId(eventId),
+        });
+        if (totalInEvent > 0) {
+          console.log(`Vector search returned 0 results but event has ${totalInEvent} descriptors. Running fallback manual search.`);
+          matchingFaces = await fallbackFaceSearch(descriptor, eventId, threshold);
+        }
+      }
     } catch (vectorSearchError) {
       // Fallback: if vector search index doesn't exist, use cosine similarity manually
       console.warn(
@@ -130,13 +159,13 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Fallback cosine similarity search when Atlas Vector Search is not available
+ * Fallback Euclidean distance search when Atlas Vector Search is not available
  * This is slower but works with any MongoDB instance
  */
 async function fallbackFaceSearch(
   queryDescriptor: number[],
   eventId: string,
-  threshold: number
+  threshold?: number
 ) {
   const faceDescriptors = await FaceDescriptor.find({
     eventId: new mongoose.Types.ObjectId(eventId),
@@ -148,44 +177,86 @@ async function fallbackFaceSearch(
     })
     .lean();
 
-  // Calculate cosine similarity
-  const results = faceDescriptors
+  // Match threshold (Euclidean distance <= threshold, default to 0.60 for standard matching)
+  const maxDistance = threshold ?? 0.60;
+
+  const typedDescriptors = faceDescriptors as unknown as {
+    _id: mongoose.Types.ObjectId;
+    photoId: PopulatedPhoto;
+    descriptor: number[];
+    boundingBox: { x: number; y: number; width: number; height: number };
+  }[];
+
+  const results: FaceSearchResult[] = typedDescriptors
     .filter((fd) => fd.photoId) // Only include faces with active photos
     .map((fd) => {
-      const score = cosineSimilarity(queryDescriptor, fd.descriptor);
+      const dist = euclideanDistance(queryDescriptor, fd.descriptor);
+      // Map distance to a match score percentage (1.0 = perfect match, 0.0 = completely different)
+      const score = Math.max(0, 1 - dist);
       return {
         _id: fd._id,
-        photoId: fd.photoId,
+        photoId: fd.photoId._id,
         score,
+        distance: dist,
         boundingBox: fd.boundingBox,
         photo: fd.photoId,
       };
     })
-    .filter((r) => r.score >= threshold)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 50);
+    .filter((r) => r.distance <= maxDistance)
+    .sort((a, b) => a.distance - b.distance); // Closest matches first
 
-  return results;
+  return deduplicateByPhotoId(results).slice(0, 50);
+}
+
+interface PopulatedPhoto {
+  _id: mongoose.Types.ObjectId;
+  watermarkedUrl: string;
+  thumbnailUrl: string;
+  width: number;
+  height: number;
+}
+
+interface FaceSearchResult {
+  _id: mongoose.Types.ObjectId;
+  photoId: mongoose.Types.ObjectId;
+  score: number;
+  distance: number;
+  boundingBox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  photo: PopulatedPhoto;
 }
 
 /**
- * Calculate cosine similarity between two vectors
+ * Deduplicate search results keeping the one with the highest match score (closest distance)
  */
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0;
+function deduplicateByPhotoId(records: FaceSearchResult[]): FaceSearchResult[] {
+  const seen = new Set<string>();
+  const unique: FaceSearchResult[] = [];
+  for (const r of records) {
+    const pId = r.photo?._id?.toString() || r.photoId?.toString();
+    if (pId && !seen.has(pId)) {
+      seen.add(pId);
+      unique.push(r);
+    }
+  }
+  return unique;
+}
 
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
+/**
+ * Calculate Euclidean distance between two vectors
+ */
+function euclideanDistance(a: number[], b: number[]): number {
+  if (a.length !== b.length) return Infinity;
 
+  let sum = 0;
   for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    const diff = a[i] - b[i];
+    sum += diff * diff;
   }
 
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denominator === 0) return 0;
-
-  return dotProduct / denominator;
+  return Math.sqrt(sum);
 }

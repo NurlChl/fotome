@@ -8,19 +8,14 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) return 0;
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
+function euclideanDistance(a: number[], b: number[]): number {
+  if (a.length !== b.length) return Infinity;
+  let sum = 0;
   for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
+    const diff = a[i] - b[i];
+    sum += diff * diff;
   }
-  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-  if (denominator === 0) return 0;
-  return dotProduct / denominator;
+  return Math.sqrt(sum);
 }
 
 /**
@@ -80,19 +75,20 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       const photoFaces = await FaceDescriptor.find({ photoId: photo._id });
       if (photoFaces.length > 0) {
         let hasMatch = false;
-        let highestScore = 0;
+        let lowestDistance = Infinity;
 
         for (const face of photoFaces) {
-          const score = cosineSimilarity(fullUser.faceDescriptor, face.descriptor);
-          if (score > highestScore) highestScore = score;
-          if (score >= 0.65) {
+          const dist = euclideanDistance(fullUser.faceDescriptor, face.descriptor);
+          if (dist < lowestDistance) lowestDistance = dist;
+          if (dist <= 0.55) {
             hasMatch = true;
           }
         }
 
         if (!hasMatch) {
+          const highestMatchPercentage = Math.round(Math.max(0, 1 - lowestDistance) * 100);
           return NextResponse.json(
-            { error: `Biometric verification failed: You are not present in this photo (highest match: ${Math.round(highestScore * 100)}%).` },
+            { error: `Biometric verification failed: You are not present in this photo (highest match: ${highestMatchPercentage}%).` },
             { status: 403 }
           );
         }

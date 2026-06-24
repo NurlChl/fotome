@@ -69,6 +69,95 @@ export default function EventPage() {
   const [showSelfiePrompt, setShowSelfiePrompt] = useState(false);
   const [profile, setProfile] = useState<{ faceDescriptor?: number[]; [key: string]: unknown } | null>(null);
 
+  const [threshold, setThreshold] = useState(0.60);
+  const [lastDescriptor, setLastDescriptor] = useState<number[] | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<PhotoResult | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [hasAutoSearched, setHasAutoSearched] = useState(false);
+  const [isSavingFaceID, setIsSavingFaceID] = useState(false);
+  const [saveFaceSuccess, setSaveFaceSuccess] = useState(false);
+
+  const isUsingProfileFaceID = !!(
+    profile?.faceDescriptor &&
+    lastDescriptor &&
+    profile.faceDescriptor.length === lastDescriptor.length &&
+    profile.faceDescriptor.every((val, index) => val === lastDescriptor[index])
+  );
+
+  // Search faces via API (defined early to prevent before-declaration issues)
+  const searchFaces = useCallback(async (descriptor: number[], currentThreshold = threshold) => {
+    if (!event) return;
+    setSearchState('searching');
+
+    try {
+      const res = await fetch('/api/face-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          descriptor,
+          eventId: event._id,
+          threshold: currentThreshold,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setResults(data.results || []);
+        setSearchState('results');
+      } else {
+        throw new Error(data.error || 'Pencarian gagal');
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      setErrorMessage('Pencarian foto gagal. Silakan coba beberapa saat lagi.');
+      setSearchState('error');
+    }
+  }, [event, threshold]);
+
+  const saveNewFaceID = async () => {
+    if (!lastDescriptor) return;
+    setIsSavingFaceID(true);
+    try {
+      const res = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          faceDescriptor: lastDescriptor,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setProfile((prev) => prev ? { ...prev, faceDescriptor: lastDescriptor } : { faceDescriptor: lastDescriptor });
+        setSaveFaceSuccess(true);
+        setTimeout(() => setSaveFaceSuccess(false), 4000);
+      } else {
+        throw new Error(data.error || 'Gagal menyimpan Face ID');
+      }
+    } catch (error) {
+      console.error('Error saving Face ID:', error);
+      alert('Gagal memperbarui Face ID. Silakan coba lagi.');
+    } finally {
+      setIsSavingFaceID(false);
+    }
+  };
+
+  const getAccuracyLabel = (acc: number) => {
+    if (acc <= 35) return 'Longgar (Banyak Foto)';
+    if (acc <= 42) return 'Standar';
+    if (acc <= 50) return 'Ketat (Akurat)';
+    return 'Sangat Ketat (Sangat Akurat)';
+  };
+
+  const handleAccuracyChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const accuracyPercent = parseInt(e.target.value, 10);
+    const newThreshold = parseFloat((1 - accuracyPercent / 100).toFixed(2));
+    setThreshold(newThreshold);
+    if (lastDescriptor) {
+      await searchFaces(lastDescriptor, newThreshold);
+    }
+  };
+
   useEffect(() => {
     if (session) {
       fetch('/api/users/profile')
@@ -76,9 +165,35 @@ export default function EventPage() {
         .then((data) => {
           if (data.user) setProfile(data.user);
         })
-        .catch((err) => console.error('Error loading biometrics profile:', err));
+        .catch((err) => console.error('Error loading biometrics profile:', err))
+        .finally(() => {
+          setTimeout(() => setProfileLoaded(true), 0);
+        });
+    } else {
+      setTimeout(() => setProfileLoaded(true), 0);
     }
   }, [session]);
+
+  // Combined auto-search & selfie prompt coordination
+  useEffect(() => {
+    if (event && profileLoaded && !hasAutoSearched) {
+      if (profile?.faceDescriptor && profile.faceDescriptor.length === 128) {
+        // User has a registered Face ID. Skip popup and search immediately!
+        setTimeout(() => {
+          setHasAutoSearched(true);
+          setShowSelfiePrompt(false);
+          setLastDescriptor(profile.faceDescriptor || null);
+          searchFaces(profile.faceDescriptor || [], threshold);
+        }, 0);
+      } else {
+        // Guest or logged-in user without Face ID. Show confirmation modal.
+        setTimeout(() => {
+          setHasAutoSearched(true);
+          setShowSelfiePrompt(true);
+        }, 0);
+      }
+    }
+  }, [event, profile, profileLoaded, hasAutoSearched, threshold, searchFaces]);
 
   // Checkout Modal State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -99,7 +214,6 @@ export default function EventPage() {
         const data = await res.json();
         if (res.ok) {
           setEvent(data.event);
-          setShowSelfiePrompt(true);
         }
       } catch (error) {
         console.error('Error fetching event:', error);
@@ -186,7 +300,8 @@ export default function EventPage() {
       if (!descriptor) {
         throw new Error('No face detected');
       }
-      await searchFaces(descriptor);
+      setLastDescriptor(descriptor);
+      await searchFaces(descriptor, threshold);
     } catch (error) {
       console.error('Face processing error:', error);
       setErrorMessage('Wajah tidak terdeteksi. Silakan coba lagi dengan foto yang lebih jelas.');
@@ -194,36 +309,9 @@ export default function EventPage() {
     }
   };
 
-  // Search faces via API
-  const searchFaces = async (descriptor: number[]) => {
-    if (!event) return;
-    setSearchState('searching');
 
-    try {
-      const res = await fetch('/api/face-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          descriptor,
-          eventId: event._id,
-          threshold: 0.6,
-        }),
-      });
 
-      const data = await res.json();
 
-      if (res.ok) {
-        setResults(data.results || []);
-        setSearchState('results');
-      } else {
-        throw new Error(data.error || 'Pencarian gagal');
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      setErrorMessage('Pencarian foto gagal. Silakan coba beberapa saat lagi.');
-      setSearchState('error');
-    }
-  };
 
   // Toggle photo selection
   const togglePhotoSelection = (photoId: string) => {
@@ -244,6 +332,8 @@ export default function EventPage() {
     setResults([]);
     setSelectedPhotos(new Set());
     setErrorMessage('');
+    setLastDescriptor(null);
+    setPreviewPhoto(null);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
@@ -504,7 +594,12 @@ export default function EventPage() {
               {profile?.faceDescriptor && (
                 <button
                   className="group border border-emerald-950/40 hover:border-emerald-500 hover:bg-neutral-900/30 rounded-2xl p-6 text-center transition duration-300 flex flex-col items-center gap-3 bg-neutral-950/20"
-                  onClick={() => profile?.faceDescriptor && searchFaces(profile.faceDescriptor)}
+                  onClick={() => {
+                    if (profile?.faceDescriptor) {
+                      setLastDescriptor(profile.faceDescriptor);
+                      searchFaces(profile.faceDescriptor, threshold);
+                    }
+                  }}
                   id="btn-search-by-faceid"
                 >
                   <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-transform">
@@ -614,6 +709,69 @@ export default function EventPage() {
                 </button>
               </div>
 
+              {/* Slider for matching sensitivity */}
+              {lastDescriptor && (
+                <div className="bg-neutral-950/40 border border-neutral-850 p-4 rounded-2xl space-y-4 animate-fadeIn">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold text-neutral-400">Akurasi Pencocokan (Minimum Kemiripan)</span>
+                      <span className="font-bold text-primary-400 bg-primary-500/10 px-2.5 py-0.5 rounded-full border border-primary-500/20">
+                        {Math.round((1 - threshold) * 100)}% ({getAccuracyLabel(Math.round((1 - threshold) * 100))})
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="30"
+                      max="70"
+                      step="2"
+                      value={Math.round((1 - threshold) * 100)}
+                      onChange={handleAccuracyChange}
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-primary-500 focus:outline-none"
+                    />
+                    <div className="flex justify-between text-[10px] text-neutral-600 font-light">
+                      <span>Longgar (Banyak Foto)</span>
+                      <span>Sangat Ketat (Sangat Akurat)</span>
+                    </div>
+                  </div>
+
+                  {session && (
+                    <div className="pt-3 border-t border-neutral-900/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${isUsingProfileFaceID ? 'bg-emerald-500' : 'bg-primary-500'} animate-pulse`} />
+                        <span className="text-neutral-400 font-light">
+                          {isUsingProfileFaceID 
+                            ? "Menggunakan Face ID terdaftar di profil" 
+                            : "Menggunakan pemindaian foto selfie baru"}
+                        </span>
+                      </div>
+                      
+                      {saveFaceSuccess ? (
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1.5 animate-fadeIn">
+                          <Check className="w-3.5 h-3.5" /> Face ID berhasil diperbarui!
+                        </span>
+                      ) : !isUsingProfileFaceID ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-xs rounded-lg px-2.5 py-1 text-[10px] font-semibold flex items-center gap-1 hover:bg-neutral-800 transition duration-150"
+                          onClick={saveNewFaceID}
+                          disabled={isSavingFaceID}
+                        >
+                          {isSavingFaceID ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" /> Menyimpan...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" /> Simpan sebagai Face ID Utama
+                            </>
+                          )}
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {results.length > 0 ? (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -627,7 +785,7 @@ export default function EventPage() {
                               ? 'border-primary-500 ring-1 ring-primary-500/50 shadow-lg shadow-primary-500/10' 
                               : 'border-neutral-850 hover:border-neutral-700'
                           }`}
-                          onClick={() => togglePhotoSelection(result.photo._id)}
+                          onClick={() => setPreviewPhoto(result)}
                         >
                           <div className="aspect-4/3 overflow-hidden bg-neutral-950 relative">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -637,16 +795,34 @@ export default function EventPage() {
                               className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                               loading="lazy"
                             />
+                            
+                            {/* Hover overlay indicator */}
+                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                              <span className="text-[10px] font-medium px-2.5 py-1 bg-black/65 text-neutral-100 rounded-full backdrop-blur-sm border border-neutral-880">
+                                Pratinjau Foto
+                              </span>
+                            </div>
+
                             {/* Match score indicator */}
                             <span className="absolute bottom-2.5 left-2.5 text-[10px] px-2 py-0.5 font-bold rounded-full bg-black/75 text-emerald-400 backdrop-blur-md">
                               {Math.round(result.score * 100)}% match
                             </span>
-                            {/* Checkmark checkbox indicator */}
-                            {isSelected && (
-                              <div className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full bg-primary-500 flex items-center justify-center text-white border border-neutral-900/50 shadow shadow-primary-500/20">
-                                <Check className="w-3.5 h-3.5" />
-                              </div>
-                            )}
+
+                            {/* Corner selector button */}
+                            <button
+                              type="button"
+                              className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-full flex items-center justify-center border transition-all duration-200 z-10 ${
+                                isSelected
+                                  ? 'bg-primary-500 border-primary-400 text-white shadow shadow-primary-500/20'
+                                  : 'bg-black/40 border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:bg-black/60'
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePhotoSelection(result.photo._id);
+                              }}
+                            >
+                              <Check className={`w-4 h-4 transition-transform duration-200 ${isSelected ? 'scale-100' : 'scale-0'}`} />
+                            </button>
                           </div>
                         </div>
                       );
@@ -878,6 +1054,69 @@ export default function EventPage() {
               >
                 {isProcessingPayment ? 'Processing...' : 'Bayar Sekarang'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Photo Preview Modal */}
+      {previewPhoto && (
+        <div className="fixed inset-0 bg-neutral-950/95 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 z-60 animate-fadeIn">
+          {/* Close Area */}
+          <div className="absolute inset-0 cursor-default" onClick={() => setPreviewPhoto(null)} />
+          
+          <div className="w-full max-w-4xl bg-neutral-900/40 border border-neutral-850/30 rounded-3xl overflow-hidden shadow-2xl relative z-10 flex flex-col max-h-[90vh]">
+            {/* Header / Top Bar */}
+            <div className="flex items-center justify-between p-4 border-b border-neutral-850/40 bg-neutral-900/80 backdrop-blur-md">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-neutral-400 font-light">Akurasi Kemiripan:</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  {Math.round(previewPhoto.score * 100)}% match
+                </span>
+              </div>
+              <button 
+                className="w-8 h-8 rounded-full bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-neutral-50 flex items-center justify-center transition duration-150"
+                onClick={() => setPreviewPhoto(null)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Photo Container */}
+            <div className="flex-1 overflow-hidden flex items-center justify-center p-4 bg-neutral-950/20">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewPhoto.photo.watermarkedUrl}
+                alt="Full preview with watermark"
+                className="max-w-full max-h-[60vh] sm:max-h-[65vh] object-contain rounded-xl shadow-lg border border-neutral-850/50"
+              />
+            </div>
+
+            {/* Footer / Control Bar */}
+            <div className="p-5 border-t border-neutral-850/40 bg-neutral-900/85 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1 text-left">
+                <h4 className="text-sm font-bold text-neutral-100">{event.title}</h4>
+                <p className="text-xs text-neutral-400 font-light">
+                  {event.pricePerPhoto === 0 
+                    ? 'Foto ini dapat diunduh secara gratis.' 
+                    : `Harga foto: ${formatPrice(event.pricePerPhoto)}`}
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className={`btn flex-1 sm:flex-initial rounded-xl px-6 py-2.5 text-xs font-semibold flex items-center justify-center gap-2 border transition duration-200 ${
+                    selectedPhotos.has(previewPhoto.photo._id)
+                      ? 'bg-primary-500 border-primary-400 text-white hover:bg-primary-600'
+                      : 'bg-neutral-850 border-neutral-750 text-neutral-200 hover:bg-neutral-750'
+                  }`}
+                  onClick={() => togglePhotoSelection(previewPhoto.photo._id)}
+                >
+                  <Check className={`w-4 h-4 transition-transform duration-200 ${selectedPhotos.has(previewPhoto.photo._id) ? 'scale-100' : 'scale-0'}`} />
+                  {selectedPhotos.has(previewPhoto.photo._id) ? 'Dipilih' : 'Pilih Foto'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
