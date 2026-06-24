@@ -93,32 +93,22 @@ function MyPhotos() {
   const handleDownload = async (photoId: string, orderNumber: string) => {
     setDownloadingId(photoId);
     try {
-      const res = await fetch(`/api/photos/${photoId}/download`);
-      const data = await res.json();
-
+      const res = await fetch(`/api/photos/${photoId}/download?download=true`);
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate download URL');
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to download photo');
       }
 
-      // Try fetching as blob to force browser save dialog
-      try {
-        const imageRes = await fetch(data.downloadUrl);
-        if (!imageRes.ok) throw new Error('Fetch failed');
-        const blob = await imageRes.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
 
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = `FotoMe-${orderNumber}-${photoId.substring(18)}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-      } catch (blobError) {
-        console.warn('CORS blocked direct blob download, opening in new tab instead:', blobError);
-        // Fallback: open in new tab
-        window.open(data.downloadUrl, '_blank');
-      }
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `FotoMe-${orderNumber}-${photoId.substring(18)}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error('Download handler error:', error);
       alert(error instanceof Error ? error.message : 'Failed to download photo. Please try again.');

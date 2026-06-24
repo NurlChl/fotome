@@ -154,7 +154,7 @@ export function getSignedDownloadUrl(publicId: string): string {
   const expiresAt = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
   return cloudinary.url(publicId, {
     sign_url: true,
-    type: 'authenticated',
+    type: 'upload',
     transformation: [
       { quality: 'auto:best', fetch_format: 'auto' },
     ],

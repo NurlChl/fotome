@@ -32,6 +32,9 @@
   --color-neutral-900: var(--neutral-900);
   --color-neutral-950: var(--neutral-950);
 
+  --z-100: 100;
+  --z-150: 150;
+
   --color-bg-primary: var(--neutral-950);
   --color-bg-secondary: var(--neutral-900);
   --color-bg-tertiary: var(--neutral-850);

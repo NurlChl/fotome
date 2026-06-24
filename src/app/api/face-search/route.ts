@@ -47,8 +47,8 @@ export async function POST(req: NextRequest) {
             index: 'face_vector_index',
             path: 'descriptor',
             queryVector: descriptor,
-            numCandidates: 200,
-            limit: 50,
+            numCandidates: 600,
+            limit: 300,
             filter: {
               eventId: new mongoose.Types.ObjectId(eventId),
             },
@@ -82,6 +82,9 @@ export async function POST(req: NextRequest) {
               thumbnailUrl: 1,
               width: 1,
               height: 1,
+              createdAt: 1,
+              faceCount: 1,
+              hasFaces: 1,
             },
           },
         },
@@ -173,7 +176,7 @@ async function fallbackFaceSearch(
     .populate({
       path: 'photoId',
       match: { status: 'active' },
-      select: 'watermarkedUrl thumbnailUrl width height',
+      select: 'watermarkedUrl thumbnailUrl width height faceCount hasFaces createdAt',
     })
     .lean();
 

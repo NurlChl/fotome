@@ -30,10 +30,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const skip = (page - 1) * limit;
+    
+    const sortParam = searchParams.get('sort') || 'newest';
+    const sortQuery: Record<string, 1 | -1> = sortParam === 'oldest' ? { createdAt: 1 } : { createdAt: -1 };
 
     const [photos, total] = await Promise.all([
       Photo.find({ eventId: event._id, status: 'active' })
-        .sort({ createdAt: -1 })
+        .sort(sortQuery)
         .skip(skip)
         .limit(limit)
         .select('watermarkedUrl thumbnailUrl width height faceCount createdAt')

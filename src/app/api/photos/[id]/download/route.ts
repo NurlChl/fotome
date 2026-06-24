@@ -21,7 +21,7 @@ function euclideanDistance(a: number[], b: number[]): number {
 /**
  * GET /api/photos/[id]/download - Get signed download URL for purchased photo
  */
-export async function GET(_req: NextRequest, { params }: RouteParams) {
+export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
     const session = await auth();
     if (!session?.user) {
@@ -41,7 +41,11 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     const eventObj = await Event.findById(photo.eventId);
     const isFree = eventObj && eventObj.pricePerPhoto === 0;
 
-    if (!isFree) {
+    // Check photographer owner permission
+    const isPhotographerOwner = eventObj && eventObj.photographerId && session.user.id === eventObj.photographerId.toString();
+    const isBypassUser = session.user.role === 'admin' || session.user.role === 'superadmin' || !!isPhotographerOwner;
+
+    if (!isFree && !isBypassUser) {
       // Verify the user has purchased this photo
       const paidOrders = await Order.find({
         userId: session.user.id,
@@ -61,8 +65,8 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Biometric Owner Verification (except for Admin & Superadmin)
-    if (session.user.role !== 'admin' && session.user.role !== 'superadmin') {
+    // Biometric Owner Verification (except for Admin, Superadmin & Photographer Owner)
+    if (!isBypassUser) {
       const fullUser = await User.findById(session.user.id);
       if (!fullUser || !fullUser.faceDescriptor || fullUser.faceDescriptor.length !== 128) {
         return NextResponse.json(
@@ -105,6 +109,26 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
 
     // Generate signed download URL (expires in 1 hour)
     const downloadUrl = getSignedDownloadUrl(photo.cloudinaryPublicId);
+
+    const downloadParam = req.nextUrl.searchParams.get('download');
+    if (downloadParam === 'true') {
+      const imageRes = await fetch(downloadUrl);
+      if (!imageRes.ok) {
+        return NextResponse.json(
+          { error: 'Failed to fetch image from storage' },
+          { status: 502 }
+        );
+      }
+      const arrayBuffer = await imageRes.arrayBuffer();
+      const contentType = imageRes.headers.get('Content-Type') || 'image/jpeg';
+      
+      return new NextResponse(Buffer.from(arrayBuffer), {
+        headers: {
+          'Content-Disposition': `attachment; filename="FotoMe-${photoId}.jpg"`,
+          'Content-Type': contentType,
+        },
+      });
+    }
 
     return NextResponse.json({
       downloadUrl,
