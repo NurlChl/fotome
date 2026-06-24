@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Providers from '@/components/Providers';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import ConditionalLayout from '@/components/ConditionalLayout';
 
 export const metadata: Metadata = {
   title: {
@@ -67,9 +66,7 @@ export default function RootLayout({
               minHeight: '100vh',
             }}
           >
-            <Navbar />
-            <main style={{ flex: 1 }}>{children}</main>
-            <Footer />
+            <ConditionalLayout>{children}</ConditionalLayout>
           </div>
         </Providers>
       </body>

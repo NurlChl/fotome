@@ -385,9 +385,44 @@ export default function EventPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-4">
-        <div className="w-10 h-10 border-4 border-neutral-800 border-t-primary-500 rounded-full animate-spin" />
-        <p className="text-neutral-400 text-sm">Memuat detail event...</p>
+      <div className="pt-28 min-h-screen pb-24 bg-neutral-950 text-neutral-100">
+        {/* Event Header Skeleton */}
+        <div className="relative border-b border-neutral-900 pb-8 mb-10 overflow-hidden">
+          <div className="container mx-auto px-6 max-w-7xl relative z-10">
+            <div className="h-4 bg-neutral-900 rounded w-32 mb-6 animate-pulse" />
+            <div className="space-y-4">
+              <div className="h-8 bg-neutral-900 rounded w-24 animate-pulse" />
+              <div className="h-10 bg-neutral-900 rounded w-3/4 animate-pulse" />
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-4 bg-neutral-900 rounded w-32 animate-pulse" />
+                ))}
+              </div>
+              <div className="h-16 bg-neutral-900 rounded w-full max-w-2xl animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        <div className="container mx-auto px-6 max-w-7xl">
+          <div className="bg-neutral-900/30 border border-neutral-900 rounded-3xl p-8 max-w-4xl mx-auto shadow-xl">
+            {/* Title Skeleton */}
+            <div className="text-center max-w-md mx-auto mb-10 space-y-2">
+              <div className="h-6 bg-neutral-900 rounded w-48 mx-auto animate-pulse" />
+              <div className="h-4 bg-neutral-900 rounded w-full animate-pulse" />
+            </div>
+
+            {/* Buttons Skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="border border-neutral-850 rounded-2xl p-6 bg-neutral-950/20 animate-pulse">
+                  <div className="w-12 h-12 rounded-xl bg-neutral-800 mx-auto mb-3" />
+                  <div className="h-5 bg-neutral-800 rounded w-32 mx-auto mb-2" />
+                  <div className="h-4 bg-neutral-800 rounded w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }

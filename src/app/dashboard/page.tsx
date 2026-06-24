@@ -40,7 +40,7 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -63,6 +63,14 @@ export default function DashboardPage() {
     }
 
     if (status === 'authenticated') {
+      const role = session?.user?.role;
+      
+      // Block non-admin access
+      if (role !== 'admin' && role !== 'superadmin') {
+        router.push('/');
+        return;
+      }
+
       fetchDashboardData();
     }
   }, [status, router]);
@@ -145,9 +153,49 @@ export default function DashboardPage() {
 
   if (status === 'loading' || isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-        <div className="w-10 h-10 border-4 border-neutral-800 border-t-primary-500 rounded-full animate-spin" />
-        <p className="text-neutral-400 text-sm">Loading dashboard data...</p>
+      <div className="space-y-6 sm:space-y-8 lg:space-y-10 animate-fadeIn">
+        {/* Title Skeleton */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-2 animate-pulse">
+            <div className="h-8 bg-neutral-900 rounded w-48" />
+            <div className="h-4 bg-neutral-900 rounded w-64" />
+          </div>
+          <div className="h-10 bg-neutral-900 rounded w-full sm:w-40 animate-pulse" />
+        </div>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="border border-neutral-900 rounded-xl sm:rounded-2xl p-4 sm:p-6 animate-pulse">
+              <div className="flex items-center justify-between mb-4">
+                <div className="h-4 bg-neutral-800 rounded w-1/3" />
+                <div className="w-10 h-10 bg-neutral-800 rounded-xl" />
+              </div>
+              <div className="h-8 bg-neutral-800 rounded w-1/2" />
+            </div>
+          ))}
+        </div>
+
+        {/* Recent Events Skeleton */}
+        <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6">
+          <div className="mb-4 sm:mb-6 border-b border-neutral-900 pb-3">
+            <div className="h-6 bg-neutral-800 rounded w-32 animate-pulse" />
+          </div>
+          <div className="space-y-3 sm:space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-4 p-4 sm:p-5 bg-neutral-950/40 border border-neutral-900 rounded-xl sm:rounded-2xl animate-pulse">
+                <div className="space-y-2">
+                  <div className="h-5 bg-neutral-800 rounded w-3/4" />
+                  <div className="h-4 bg-neutral-800 rounded w-1/2" />
+                </div>
+                <div className="flex justify-between">
+                  <div className="h-6 bg-neutral-800 rounded w-24" />
+                  <div className="h-6 bg-neutral-800 rounded w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -197,32 +245,32 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-10 animate-fadeIn">
+    <div className="space-y-6 sm:space-y-8 lg:space-y-10 animate-fadeIn">
       {/* Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-neutral-50">Dashboard Overview</h1>
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-neutral-50">Dashboard Overview</h1>
           <p className="text-neutral-400 text-xs mt-1">Kelola event dan pantau hasil unggahan foto Anda.</p>
         </div>
-        <Link href="/dashboard/events/new" className="btn btn-primary rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25 text-sm font-semibold" id="btn-create-event-dashboard">
+        <Link href="/dashboard/events/new" className="btn btn-primary rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25 text-sm font-semibold w-full sm:w-auto" id="btn-create-event-dashboard">
           <Plus className="w-4 h-4" /> Create New Event
         </Link>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {statCards.map((stat, i) => {
           const IconComponent = stat.icon;
           return (
-            <div key={i} className={`bg-linear-to-br ${stat.color} border rounded-2xl p-6 shadow-xl flex flex-col justify-between`}>
+            <div key={i} className={`bg-linear-to-br ${stat.color} border border-neutral-800/50 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-sm flex flex-col justify-between`}>
               <div className="flex items-center justify-between">
-                <span className="text-neutral-300 text-xs font-semibold uppercase tracking-wider">{stat.label}</span>
-                <div className="bg-neutral-950/45 p-2 rounded-lg border border-neutral-850">
-                  <IconComponent className="w-4 h-4 text-neutral-300" />
+                <span className="text-neutral-300 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">{stat.label}</span>
+                <div className="bg-neutral-950/45 p-1.5 sm:p-2 rounded-lg border border-neutral-850">
+                  <IconComponent className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-neutral-300" />
                 </div>
               </div>
-              <div className="mt-4">
-                <div className="text-2xl font-bold tracking-tight text-neutral-50 font-display">{stat.value}</div>
+              <div className="mt-3 sm:mt-4">
+                <div className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-50 font-display">{stat.value}</div>
                 {stat.action}
               </div>
             </div>
@@ -231,22 +279,21 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Events */}
-      <div className="bg-neutral-900/30 border border-neutral-900 rounded-3xl p-6">
-        <div className="mb-6 border-b border-neutral-900 pb-3">
-          <h2 className="text-lg font-bold text-neutral-50">Your Events</h2>
+      <div className="bg-neutral-900/30 border border-neutral-800/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
+        <div className="mb-4 sm:mb-6 border-b border-neutral-800/50 pb-3">
+          <h2 className="text-base sm:text-lg font-bold text-neutral-50">Your Events</h2>
         </div>
         
         {events.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {events.map((event) => (
-              <div key={event._id} className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 p-5 bg-neutral-950/40 border border-neutral-900 rounded-2xl hover:border-neutral-800 transition duration-200">
+              <div key={event._id} className="flex flex-col gap-4 p-4 sm:p-5 bg-neutral-950/40 border border-neutral-800/50 rounded-xl sm:rounded-2xl hover:border-neutral-700 transition duration-200 shadow-sm">
                 <div className="space-y-1.5 min-w-0">
-                  <p className="font-bold text-neutral-50 text-base truncate">{event.title}</p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 font-light">
-                    <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {formatDate(event.eventDate)}</span>
-                    <span>•</span>
-                    <span>Kategori: {event.category}</span>
-                    <span>•</span>
+                  <p className="font-bold text-neutral-50 text-sm sm:text-base truncate">{event.title}</p>
+                  <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-xs text-neutral-500 font-light">
+                    <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> {formatDate(event.eventDate)}</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="hidden sm:inline">Kategori: {event.category}</span>
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
                       event.status === 'published' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 
                       'bg-neutral-900 text-neutral-400 border-neutral-800'
@@ -254,21 +301,26 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 
-                <div className="flex flex-wrap items-center gap-x-8 gap-y-4 lg:self-center">
-                  <div className="text-right">
-                    <p className="font-bold text-neutral-50 text-sm font-display">{event.photoCount} Photos</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">{event.soldCount} Sold</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-emerald-500 text-sm font-display">{formatPrice(event.revenue)}</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">Earnings</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex gap-6 sm:gap-8">
+                    <div className="text-left">
+                      <p className="font-bold text-neutral-50 text-sm font-display">{event.photoCount} Photos</p>
+                      <p className="text-xs text-neutral-500 mt-0.5">{event.soldCount} Sold</p>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold text-emerald-500 text-sm font-display">{formatPrice(event.revenue)}</p>
+                      <p className="text-xs text-neutral-500 mt-0.5">Earnings</p>
+                    </div>
                   </div>
                   <div className="flex gap-2">
-                    <Link href={`/events/${event.slug}`} className="btn btn-ghost btn-sm text-xs flex items-center gap-1 rounded-lg" target="_blank">
-                      View Page <ExternalLink className="w-3.5 h-3.5" />
+                    <Link href={`/events/${event.slug}`} className="btn btn-ghost btn-sm text-xs flex items-center gap-1 rounded-lg flex-1 sm:flex-initial justify-center" target="_blank">
+                      <span className="hidden sm:inline">View Page</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
                     </Link>
-                    <Link href={`/dashboard/events/${event.slug}`} className="btn btn-secondary btn-sm text-xs font-semibold rounded-lg flex items-center gap-1" id={`btn-manage-${event.slug}`}>
-                      Manage & Upload <ChevronRight className="w-3.5 h-3.5" />
+                    <Link href={`/dashboard/events/${event.slug}`} className="btn btn-secondary btn-sm text-xs font-semibold rounded-lg flex items-center gap-1 flex-1 sm:flex-initial justify-center" id={`btn-manage-${event.slug}`}>
+                      <span className="hidden sm:inline">Manage</span>
+                      <span className="sm:hidden">Upload</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>
                 </div>
@@ -276,12 +328,12 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 bg-neutral-950/20 border border-neutral-900 border-dashed rounded-2xl space-y-4">
-            <Layers className="w-10 h-10 text-neutral-600 mx-auto" />
-            <p className="text-sm text-neutral-500 max-w-xs mx-auto font-light">
+          <div className="text-center py-12 sm:py-16 bg-neutral-950/20 border border-neutral-800/50 border-dashed rounded-2xl space-y-4">
+            <Layers className="w-8 sm:w-10 h-8 sm:h-10 text-neutral-600 mx-auto" />
+            <p className="text-xs sm:text-sm text-neutral-500 max-w-xs mx-auto font-light px-4">
               Belum ada event yang dibuat. Silakan buat event pertama Anda untuk mulai mengunggah foto.
             </p>
-            <Link href="/dashboard/events/new" className="btn btn-secondary btn-sm rounded-lg py-2">
+            <Link href="/dashboard/events/new" className="btn btn-secondary btn-sm rounded-lg py-2 inline-flex">
               Create First Event
             </Link>
           </div>
@@ -291,14 +343,14 @@ export default function DashboardPage() {
       {/* Withdrawal Modal */}
       {isWithdrawOpen && (
         <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-md flex items-center justify-center px-4 z-50 animate-fadeIn">
-          <div className="w-full max-w-md bg-neutral-900 border border-neutral-850 rounded-3xl p-6 shadow-2xl relative">
+          <div className="w-full max-w-md bg-neutral-900 border border-neutral-800/50 rounded-3xl p-6 shadow-lg relative">
             <button 
               className="absolute top-4 right-4 text-neutral-500 hover:text-neutral-50 transition duration-150"
               onClick={() => setIsWithdrawOpen(false)}
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2 border-b border-neutral-850 pb-3 mb-5">
+            <div className="flex items-center gap-2 border-b border-neutral-800/50 pb-3 mb-5">
               <Wallet className="w-5 h-5 text-primary-400" />
               <h3 className="text-lg font-bold text-neutral-50">Withdraw Funds</h3>
             </div>

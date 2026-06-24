@@ -65,7 +65,7 @@ export default function Home() {
 
           {/* Hero Visual Scan Animation */}
           <div className="lg:col-span-5 flex justify-center relative">
-            <div className="w-full max-w-[360px] aspect-4/5 bg-neutral-900/20 backdrop-blur-md border border-neutral-800 rounded-2xl p-6 relative flex flex-col justify-between overflow-hidden shadow-xl">
+            <div className="w-full max-w-[360px] aspect-4/5 bg-neutral-900/20 backdrop-blur-md border border-neutral-800/50 rounded-2xl p-6 relative flex flex-col justify-between overflow-hidden shadow-sm">
               <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 border-primary-600" />
               <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 border-primary-600" />
               <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 border-primary-600" />
@@ -91,7 +91,7 @@ export default function Home() {
               </div>
 
               {/* Match tag */}
-              <div className="mt-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-2 flex items-center justify-center gap-2 text-xs font-medium text-emerald-400">
+              <div className="mt-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-2 flex items-center justify-center gap-2 text-xs font-medium text-emerald-400 shadow-sm">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
                 Match Found! (98%)
               </div>

@@ -108,7 +108,7 @@ export default function EventsPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full bg-neutral-900/50 border border-neutral-800 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 rounded-xl pl-11 pr-4 py-3 text-sm text-neutral-50 placeholder:text-neutral-500 transition outline-none"
+              className="w-full bg-neutral-900/50 border border-neutral-800/50 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 rounded-xl pl-11 pr-4 py-3 text-sm text-neutral-50 placeholder:text-neutral-500 transition outline-none"
               id="events-search"
             />
           </div>
@@ -120,8 +120,8 @@ export default function EventsPage() {
                 key={cat.value}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-medium whitespace-nowrap transition-all duration-200 ${
                   category === cat.value 
-                    ? 'bg-primary-500 text-white border-primary-500 shadow-md shadow-primary-500/20' 
-                    : 'bg-neutral-900/50 border-neutral-800 text-neutral-400 hover:text-neutral-50 hover:bg-neutral-800'
+                    ? 'bg-primary-500 text-white border-primary-500 shadow-sm shadow-primary-500/20' 
+                    : 'bg-neutral-900/50 border-neutral-800/50 text-neutral-400 hover:text-neutral-50 hover:bg-neutral-800'
                 }`}
                 onClick={() => {
                   setCategory(cat.value);
@@ -141,7 +141,7 @@ export default function EventsPage() {
         {isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-neutral-900/20 border border-neutral-900 rounded-2xl overflow-hidden">
+              <div key={i} className="bg-neutral-900/20 border border-neutral-800/50 rounded-2xl overflow-hidden shadow-sm">
                 <div className="w-full aspect-video bg-neutral-800/50 animate-pulse" />
                 <div className="p-5 space-y-3">
                   <div className="bg-neutral-800/50 animate-pulse rounded w-3/4 h-5 mb-2" />
@@ -179,7 +179,7 @@ export default function EventsPage() {
                         </span>
                       </div>
                     )}
-                    <div className="absolute top-3 left-3 bg-neutral-950/80 backdrop-blur-md border border-neutral-800 text-neutral-50 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
+                    <div className="absolute top-3 left-3 bg-neutral-950/80 backdrop-blur-md border border-neutral-800/50 text-neutral-50 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-sm">
                       {CATEGORIES.find((c) => c.value === event.category)?.label || event.category}
                     </div>
                   </div>
@@ -229,8 +229,8 @@ export default function EventsPage() {
             )}
           </>
         ) : (
-          <div className="flex flex-col items-center justify-center py-24 text-center border border-neutral-900 border-dashed rounded-3xl bg-neutral-900/10">
-            <div className="mb-4 p-4 rounded-full bg-neutral-900/50 border border-neutral-800 inline-flex">
+          <div className="flex flex-col items-center justify-center py-24 text-center border border-neutral-800/50 border-dashed rounded-3xl bg-neutral-900/10 shadow-sm">
+            <div className="mb-4 p-4 rounded-full bg-neutral-900/50 border border-neutral-800/50 inline-flex shadow-sm">
               <Search className="w-8 h-8 text-neutral-500" />
             </div>
             <h3 className="text-lg font-bold text-neutral-50 mb-2">No events found</h3>
