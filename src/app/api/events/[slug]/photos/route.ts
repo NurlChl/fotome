@@ -225,6 +225,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       status: 'active',
     });
     event.photoCount = activePhotoCount;
+
+    // Auto-set coverImage to latest photo if not already set
+    if (!event.coverImage && uploadResults.some(r => r.status === 'success')) {
+      const latestPhoto = await Photo.findOne({
+        eventId: event._id,
+        status: 'active',
+      }).sort({ createdAt: -1 });
+
+      if (latestPhoto) {
+        event.coverImage = latestPhoto.thumbnailUrl || latestPhoto.cloudinaryUrl;
+      }
+    }
+
     await event.save();
 
     const successCount = uploadResults.filter(

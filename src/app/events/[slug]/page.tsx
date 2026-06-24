@@ -20,7 +20,9 @@ import {
   Download, 
   QrCode, 
   Landmark,
-  X
+  X,
+  Search,
+  RefreshCw
 } from 'lucide-react';
 
 interface EventData {
@@ -572,8 +574,8 @@ export default function EventPage() {
                     ? `Ditemukan ${results.length} foto pencocokan wajah!` 
                     : 'Tidak ada foto pencocokan wajah yang ditemukan'}
                 </h3>
-                <button className="btn btn-ghost btn-sm text-xs" onClick={resetSearch}>
-                  🔄 Cari Ulang
+                <button className="btn btn-ghost btn-sm text-xs flex items-center gap-1.5" onClick={resetSearch}>
+                  <RefreshCw className="w-3.5 h-3.5" /> Cari Ulang
                 </button>
               </div>
 
@@ -657,13 +659,37 @@ export default function EventPage() {
                   )}
                 </>
               ) : (
-                <div className="bg-neutral-950/30 border border-neutral-900 rounded-2xl p-6 text-center space-y-3">
-                  <p className="text-sm text-neutral-300">Wajah Anda tidak ditemukan di event ini. Hal ini dapat disebabkan oleh:</p>
-                  <ul className="text-xs text-neutral-500 space-y-1.5 max-w-xs mx-auto list-disc pl-5 text-left font-light">
-                    <li>Kamera tidak fokus atau pencahayaan selfie kurang baik.</li>
-                    <li>Foto wajah Anda di event ini terhalang objek/orang lain.</li>
-                    <li>Silakan coba unggah foto selfie alternatif dengan cahaya yang cukup.</li>
-                  </ul>
+                <div className="bg-neutral-950/30 border border-neutral-900 rounded-2xl p-10 text-center space-y-4 animate-fadeIn">
+                  <div className="mx-auto w-16 h-16 bg-neutral-900/60 border border-neutral-850 rounded-2xl flex items-center justify-center">
+                    <Search className="w-8 h-8 text-neutral-600" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-base font-bold text-neutral-300">Wajah Tidak Ditemukan</h3>
+                    <p className="text-sm text-neutral-400 font-light">Wajah Anda tidak ditemukan di event ini.</p>
+                  </div>
+                  <div className="bg-neutral-900/40 border border-neutral-850 rounded-xl p-4 max-w-md mx-auto">
+                    <p className="text-xs text-neutral-400 mb-3 font-semibold">Kemungkinan penyebab:</p>
+                    <ul className="text-xs text-neutral-500 space-y-2 text-left font-light">
+                      <li className="flex items-start gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-neutral-600 mt-0.5 shrink-0" />
+                        <span>Kamera tidak fokus atau pencahayaan selfie kurang baik</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-neutral-600 mt-0.5 shrink-0" />
+                        <span>Foto wajah Anda di event ini terhalang objek/orang lain</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <AlertCircle className="w-3.5 h-3.5 text-neutral-600 mt-0.5 shrink-0" />
+                        <span>Silakan coba unggah foto selfie alternatif dengan cahaya yang cukup</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <button 
+                    className="btn btn-secondary rounded-xl px-6 py-2 text-sm font-semibold flex items-center gap-2 mx-auto"
+                    onClick={resetSearch}
+                  >
+                    <Upload className="w-4 h-4" /> Coba Foto Lain
+                  </button>
                 </div>
               )}
             </div>

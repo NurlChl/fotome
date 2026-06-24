@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Upload, Trash2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowLeft, Loader2, Upload, Trash2, CheckCircle2, XCircle, Clock, ImageIcon } from 'lucide-react';
 import { loadModels, detectAllFacesInImage, FaceData } from '@/lib/faceDetector';
 
 interface UploadFile {
@@ -19,6 +20,8 @@ interface EventData {
   title: string;
   slug: string;
   photoCount: number;
+  status: 'draft' | 'published' | 'archived';
+  coverImage?: string;
 }
 
 export default function ManageEventPage() {
@@ -32,14 +35,25 @@ export default function ManageEventPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<string | null>(null);
   const [uploadSpeed, setUploadSpeed] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function fetchEvent() {
       const res = await fetch(`/api/events/${slug}`);
       const data = await res.json();
-      if (res.ok) setEvent(data.event);
+      if (res.ok) {
+        setEvent(data.event);
+        if (data.event.coverImage) {
+          setThumbnailPreview(data.event.coverImage);
+        }
+      }
     }
     fetchEvent();
   }, [slug]);
@@ -80,7 +94,7 @@ export default function ManageEventPage() {
     // Helper to detect faces client-side for a file
     const detectFacesInFile = async (file: File) => {
       return new Promise<FaceData[]>((resolve) => {
-        const img = new Image();
+        const img = document.createElement('img');
         const objectUrl = URL.createObjectURL(file);
         img.onload = async () => {
           try {
@@ -235,6 +249,107 @@ export default function ManageEventPage() {
     setFiles((prev) => prev.filter((f) => f.status !== 'success'));
   };
 
+  const handlePublish = async () => {
+    if (!event) return;
+    
+    setIsPublishing(true);
+    setPublishError('');
+
+    try {
+      const res = await fetch(`/api/events/${slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'published' }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to publish event');
+      }
+
+      setEvent({ ...event, status: 'published' });
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleUnpublish = async () => {
+    if (!event) return;
+    
+    setIsPublishing(true);
+    setPublishError('');
+
+    try {
+      const res = await fetch(`/api/events/${slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'draft' }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to unpublish event');
+      }
+
+      setEvent({ ...event, status: 'draft' });
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleThumbnailSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPublishError('Please select an image file');
+      return;
+    }
+
+    setThumbnailFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setThumbnailPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadThumbnail = async () => {
+    if (!thumbnailFile || !event) return;
+
+    setIsUploadingThumbnail(true);
+    setPublishError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('coverImage', thumbnailFile);
+
+      const res = await fetch(`/api/events/${slug}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to upload thumbnail');
+      }
+
+      setEvent({ ...event, coverImage: data.event.coverImage });
+      setThumbnailFile(null);
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
+
   const successCount = files.filter((f) => f.status === 'success').length;
   const failedCount = files.filter((f) => f.status === 'failed').length;
   const pendingCount = files.filter((f) => f.status === 'pending').length;
@@ -260,13 +375,163 @@ export default function ManageEventPage() {
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
           </button>
-          <h1 className="text-2xl font-extrabold text-neutral-50 leading-tight">{event.title}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-extrabold text-neutral-50 leading-tight">{event.title}</h1>
+            <span className={`text-[10px] px-2.5 py-1 font-bold uppercase rounded-full tracking-wider border ${
+              event.status === 'published' 
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' 
+                : event.status === 'draft'
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+            }`}>
+              {event.status}
+            </span>
+          </div>
           <p className="text-xs text-neutral-500 font-light">{event.photoCount} photos uploaded</p>
         </div>
-        <Link href={`/events/${event.slug}`} className="btn btn-secondary rounded-xl py-2 px-4 text-xs font-semibold" target="_blank">
-          View Public Page ↗
-        </Link>
+        <div className="flex gap-2">
+          {event.status === 'draft' ? (
+            <button
+              onClick={handlePublish}
+              disabled={isPublishing || event.photoCount === 0}
+              className="btn btn-primary rounded-xl py-2 px-5 text-xs font-semibold shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={event.photoCount === 0 ? 'Upload at least 1 photo before publishing' : 'Publish event'}
+            >
+              {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Publish Event'}
+            </button>
+          ) : event.status === 'published' ? (
+            <button
+              onClick={handleUnpublish}
+              disabled={isPublishing}
+              className="btn btn-ghost rounded-xl py-2 px-5 text-xs font-semibold border border-neutral-800"
+            >
+              {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Unpublish'}
+            </button>
+          ) : null}
+          <Link href={`/events/${event.slug}`} className="btn btn-secondary rounded-xl py-2 px-4 text-xs font-semibold" target="_blank">
+            View Public Page ↗
+          </Link>
+        </div>
       </div>
+
+      {/* Status Messages */}
+      {publishError && (
+        <div className="bg-error-bg border border-error-border text-error-text p-4 rounded-xl text-sm flex items-start gap-2 animate-fadeIn">
+          <XCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{publishError}</span>
+        </div>
+      )}
+
+      {/* Thumbnail Upload Section */}
+      <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-neutral-50 flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" /> Event Thumbnail
+            </h3>
+            <p className="text-xs text-neutral-500 mt-1 font-light">
+              Cover image for your event. If not set, the latest uploaded photo will be used automatically.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Thumbnail Preview */}
+          <div className="relative w-full sm:w-48 h-48 bg-neutral-950/40 border-2 border-dashed border-neutral-850 rounded-xl overflow-hidden flex items-center justify-center group">
+            {thumbnailPreview ? (
+              <Image
+                src={thumbnailPreview}
+                alt="Event thumbnail"
+                fill
+                className="object-cover"
+              />
+            ) : (
+              <div className="text-center p-4">
+                <ImageIcon className="w-8 h-8 text-neutral-700 mx-auto mb-2" />
+                <p className="text-xs text-neutral-600 font-light">No thumbnail yet</p>
+              </div>
+            )}
+            {thumbnailPreview && (
+              <div className="absolute inset-0 bg-neutral-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <button
+                  onClick={() => thumbnailInputRef.current?.click()}
+                  className="btn btn-sm btn-secondary rounded-lg text-xs"
+                >
+                  Change
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Upload Controls */}
+          <div className="flex-1 flex flex-col justify-center gap-3">
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleThumbnailSelect}
+              className="hidden"
+            />
+            
+            {!thumbnailFile ? (
+              <button
+                onClick={() => thumbnailInputRef.current?.click()}
+                className="btn btn-secondary rounded-xl py-2 px-4 text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                <Upload className="w-4 h-4" /> {thumbnailPreview ? 'Change Thumbnail' : 'Upload Thumbnail'}
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={uploadThumbnail}
+                  disabled={isUploadingThumbnail}
+                  className="btn btn-primary rounded-xl py-2 px-4 text-sm font-semibold flex items-center justify-center gap-2 flex-1"
+                >
+                  {isUploadingThumbnail ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" /> Save Thumbnail
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    setThumbnailFile(null);
+                    if (event?.coverImage) {
+                      setThumbnailPreview(event.coverImage);
+                    } else {
+                      setThumbnailPreview(null);
+                    }
+                  }}
+                  className="btn btn-ghost rounded-xl py-2 px-4 text-sm"
+                  disabled={isUploadingThumbnail}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            
+            <p className="text-[10px] text-neutral-600 font-light">
+              Recommended: 1200x630px • Max 5MB • JPEG, PNG, or WebP
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {event.status === 'draft' && (
+        <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 text-amber-900 dark:text-amber-200 p-4 rounded-xl text-sm flex items-start gap-3 animate-fadeIn">
+          <Clock className="w-5 h-5 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="space-y-1">
+            <p className="font-semibold text-amber-900 dark:text-amber-200">Event is in Draft Mode</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300/80 font-light leading-relaxed">
+              This event is not visible to the public yet. Upload your photos and click <strong>"Publish Event"</strong> when you're ready to make it live.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Upload Zone */}
       <div

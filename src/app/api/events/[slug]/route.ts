@@ -53,18 +53,7 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     }
 
     const { slug } = await params;
-    const body = await req.json();
-
-    const result = updateEventSchema.safeParse(body);
-    if (!result.success) {
-      return NextResponse.json(
-        {
-          error: 'Validation error',
-          details: result.error.flatten().fieldErrors,
-        },
-        { status: 400 }
-      );
-    }
+    const contentType = req.headers.get('content-type') || '';
 
     await connectDB();
 
@@ -82,6 +71,61 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json(
         { error: 'You can only edit your own events' },
         { status: 403 }
+      );
+    }
+
+    // Handle file upload (multipart/form-data)
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const coverImageFile = formData.get('coverImage') as File;
+
+      if (coverImageFile) {
+        // Validate file
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(coverImageFile.type)) {
+          return NextResponse.json(
+            { error: 'Invalid file type. Only JPEG, PNG, and WebP are allowed.' },
+            { status: 400 }
+          );
+        }
+        if (coverImageFile.size > 5 * 1024 * 1024) {
+          return NextResponse.json(
+            { error: 'Maximum file size is 5MB' },
+            { status: 400 }
+          );
+        }
+
+        // Upload to Cloudinary
+        const arrayBuffer = await coverImageFile.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        const { uploadEventPhoto } = await import('@/lib/cloudinary');
+        const cloudinaryResult = await uploadEventPhoto(
+          buffer,
+          slug,
+          session.user.id
+        );
+
+        event.coverImage = cloudinaryResult.secure_url;
+        await event.save();
+
+        return NextResponse.json({
+          message: 'Cover image updated successfully',
+          event,
+        });
+      }
+    }
+
+    // Handle JSON update
+    const body = await req.json();
+    const result = updateEventSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: 'Validation error',
+          details: result.error.flatten().fieldErrors,
+        },
+        { status: 400 }
       );
     }
 
