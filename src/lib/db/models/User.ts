@@ -7,10 +7,15 @@ export interface IUser extends Document {
   passwordHash?: string;
   name: string;
   avatar?: string;
-  role: 'user' | 'photographer' | 'admin';
+  role: 'user' | 'photographer' | 'admin' | 'superadmin';
   googleOAuth?: {
     googleId: string;
     accessToken?: string;
+  };
+  adminPermissions?: {
+    manageUsers: boolean;
+    manageEvents: boolean;
+    managePayouts: boolean;
   };
   isVerified: boolean;
   isBanned: boolean;
@@ -22,6 +27,11 @@ export interface IUser extends Document {
     totalRevenue: number;
     availableBalance: number;
   };
+  verificationToken?: string;
+  verificationTokenExpiry?: Date;
+  resetPasswordToken?: string;
+  resetPasswordExpiry?: Date;
+  faceDescriptor?: number[];
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -53,13 +63,18 @@ const userSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ['user', 'photographer', 'admin'],
+      enum: ['user', 'photographer', 'admin', 'superadmin'],
       default: 'user',
       index: true,
     },
     googleOAuth: {
       googleId: { type: String, index: true, sparse: true },
       accessToken: { type: String },
+    },
+    adminPermissions: {
+      manageUsers: { type: Boolean, default: false },
+      manageEvents: { type: Boolean, default: false },
+      managePayouts: { type: Boolean, default: false },
     },
     isVerified: {
       type: Boolean,
@@ -69,6 +84,10 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    verificationToken: { type: String },
+    verificationTokenExpiry: { type: Date },
+    resetPasswordToken: { type: String },
+    resetPasswordExpiry: { type: Date },
     photographerProfile: {
       bio: { type: String, maxlength: 500 },
       portfolio: { type: String },
@@ -77,6 +96,16 @@ const userSchema = new Schema<IUser>(
       totalRevenue: { type: Number, default: 0 },
       availableBalance: { type: Number, default: 0 },
     },
+    faceDescriptor: {
+      type: [Number],
+      default: undefined,
+      validate: {
+        validator: function (v: number[]) {
+          return !v || v.length === 128;
+        },
+        message: 'Face descriptor must be a 128-dimensional vector',
+      },
+    },
   },
   {
     timestamps: true,
@@ -84,17 +113,12 @@ const userSchema = new Schema<IUser>(
 );
 
 // Hash password before saving
-userSchema.pre('save', async function (next) {
+userSchema.pre('save', async function () {
   if (!this.isModified('passwordHash') || !this.passwordHash) {
-    return next();
+    return;
   }
-  try {
-    const salt = await bcrypt.genSalt(12);
-    this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
-    next();
-  } catch (error) {
-    next(error as Error);
-  }
+  const salt = await bcrypt.genSalt(12);
+  this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
 });
 
 // Compare password method
@@ -109,7 +133,7 @@ userSchema.methods.comparePassword = async function (
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {
     delete ret.passwordHash;
-    delete ret.__v;
+    delete (ret as unknown as Record<string, unknown>).__v;
     return ret;
   },
 });
