@@ -86,7 +86,7 @@ export default function CreateEventPage() {
         <div className="bg-blue-500/5 border border-blue-500/20 text-blue-200 p-3 rounded-xl text-xs mt-3 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
           <p className="font-light leading-relaxed">
-            Event akan dibuat dalam mode <strong>Draft</strong>. Setelah mengupload foto, klik tombol <strong>"Publish"</strong> untuk membuat event terlihat oleh publik.
+            Event akan dibuat dalam mode <strong>Draft</strong>. Setelah mengupload foto, klik tombol <strong>&quot;Publish&quot;</strong> untuk membuat event terlihat oleh publik.
           </p>
         </div>
       </div>

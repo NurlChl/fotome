@@ -73,7 +73,7 @@ export default function DashboardPage() {
 
       fetchDashboardData();
     }
-  }, [status, router]);
+  }, [status, router, session]);
 
   async function fetchDashboardData() {
     try {

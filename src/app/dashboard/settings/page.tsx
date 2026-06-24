@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Settings as SettingsIcon, User, Lock, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { User, Lock, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function DashboardSettingsPage() {
   const { data: session, status, update } = useSession();

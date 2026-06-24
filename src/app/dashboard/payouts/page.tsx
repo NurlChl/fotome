@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { DollarSign, Loader2 } from 'lucide-react';
 
 interface PayoutData {
   _id: string;
@@ -29,22 +28,6 @@ export default function PayoutsPage() {
 
   const canManagePayouts = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.managePayouts;
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login/admin');
-      return;
-    }
-
-    if (status === 'authenticated' && !canManagePayouts) {
-      router.push('/dashboard');
-      return;
-    }
-
-    if (canManagePayouts) {
-      fetchPayouts();
-    }
-  }, [status, canManagePayouts, router]);
-
   async function fetchPayouts() {
     try {
       const res = await fetch('/api/admin/dashboard');
@@ -58,6 +41,30 @@ export default function PayoutsPage() {
       setIsLoading(false);
     }
   }
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    if (status === 'unauthenticated') {
+      router.push('/login/admin');
+      return;
+    }
+
+    if (status === 'authenticated' && !canManagePayouts) {
+      router.push('/dashboard');
+      return;
+    }
+
+    if (canManagePayouts) {
+      timer = setTimeout(() => {
+        fetchPayouts();
+      }, 0);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [status, canManagePayouts, router]);
 
   const handlePayoutAction = async (payoutId: string, action: 'approve' | 'reject') => {
     const note = prompt(`Enter optional review note for this ${action}:`);

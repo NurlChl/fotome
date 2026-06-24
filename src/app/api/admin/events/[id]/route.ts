@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
-import { Event, Photo } from '@/lib/db/models';
+import { Event } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 
 interface RouteParams {

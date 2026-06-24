@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Calendar, Loader2, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
+import { Loader2, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
 
 interface EventData {
   _id: string;
@@ -34,31 +34,6 @@ export default function AllEventsPage() {
   const isSuperadmin = session?.user?.role === 'superadmin';
   const canManageEvents = isSuperadmin || !!session?.user?.permissions?.manageEvents;
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login/admin');
-      return;
-    }
-
-    if (status === 'authenticated') {
-      const role = session.user.role;
-      
-      // Security check - only admin/superadmin
-      if (role !== 'admin' && role !== 'superadmin') {
-        router.push('/');
-        return;
-      }
-
-      // Check permission
-      if (!canManageEvents) {
-        router.push('/dashboard');
-        return;
-      }
-
-      fetchAllEvents();
-    }
-  }, [status, session, canManageEvents, router]);
-
   async function fetchAllEvents() {
     try {
       const res = await fetch('/api/admin/dashboard');
@@ -72,6 +47,39 @@ export default function AllEventsPage() {
       setIsLoading(false);
     }
   }
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    if (status === 'unauthenticated') {
+      router.push('/login/admin');
+      return;
+    }
+
+    if (status === 'authenticated') {
+      const role = session?.user?.role;
+      
+      // Security check - only admin/superadmin
+      if (role !== 'admin' && role !== 'superadmin') {
+        router.push('/');
+        return;
+      }
+
+      // Check permission
+      if (!canManageEvents) {
+        router.push('/dashboard');
+        return;
+      }
+
+      timer = setTimeout(() => {
+        fetchAllEvents();
+      }, 0);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [status, session, canManageEvents, router]);
 
   const handleDeleteEvent = async (eventId: string, eventTitle: string) => {
     if (!confirm(`Are you sure you want to delete event "${eventTitle}"? This action cannot be undone.`)) {

@@ -81,12 +81,18 @@ export default function DashboardLayout({
   // Get current theme on mount
   useEffect(() => {
     const isLight = document.documentElement.classList.contains('light');
-    setTheme(isLight ? 'light' : 'dark');
+    const timer = setTimeout(() => {
+      setTheme(isLight ? 'light' : 'dark');
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Close sidebar when route changes on mobile
   useEffect(() => {
-    setIsSidebarOpen(false);
+    const timer = setTimeout(() => {
+      setIsSidebarOpen(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [pathname]);
 
   const toggleTheme = () => {
@@ -102,19 +108,18 @@ export default function DashboardLayout({
     }
   };
 
-  const hasAccess = session && (
+  const hasAccess = !!session?.user && (
     session.user.role === 'superadmin' || 
     session.user.role === 'admin'
   );
 
   const isSuperadmin = session?.user?.role === 'superadmin';
-  const isAdmin = session?.user?.role === 'admin';
   const canManageUsers = isSuperadmin || !!session?.user?.permissions?.manageUsers;
   const canManageEvents = isSuperadmin || !!session?.user?.permissions?.manageEvents;
   const canManagePayouts = isSuperadmin || !!session?.user?.permissions?.managePayouts;
 
-  // Don't block navigation with loading screen
-  if (status === 'loading') {
+  // Don't block navigation or crash if session is loading or not loaded
+  if (status === 'loading' || !session || !session.user) {
     return (
       <div className="min-h-screen flex bg-neutral-950">
         <aside className="w-72 bg-neutral-900/95 border-r border-neutral-800 p-4 animate-pulse">
@@ -196,19 +201,19 @@ export default function DashboardLayout({
           {/* Mobile: User Card at top */}
           <div className="md:hidden pt-12">
             <div className="flex items-center gap-3 p-3 bg-neutral-950/40 border border-neutral-850 rounded-xl">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center font-bold text-white text-base shrink-0">
-                {session.user.image ? (
+              <div className="w-12 h-12 rounded-full bg-linear-to-br from-primary-500 to-accent-500 flex items-center justify-center font-bold text-white text-base shrink-0">
+                {session?.user?.image ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={session.user.image} alt={session.user.name || ''} className="w-full h-full rounded-full object-cover" />
+                  <img src={session?.user?.image} alt={session?.user?.name || ''} className="w-full h-full rounded-full object-cover" />
                 ) : (
-                  <span>{session.user.name?.charAt(0).toUpperCase()}</span>
+                  <span>{session?.user?.name?.charAt(0).toUpperCase()}</span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm text-neutral-50 truncate leading-snug">{session.user.name}</p>
-                <p className="text-xs text-neutral-500 truncate">{session.user.email}</p>
+                <p className="font-semibold text-sm text-neutral-50 truncate leading-snug">{session?.user?.name}</p>
+                <p className="text-xs text-neutral-500 truncate">{session?.user?.email}</p>
                 <span className="inline-block text-[9px] font-bold uppercase rounded-full bg-primary-500/10 text-primary-300 border border-primary-500/20 px-2 py-0.5 tracking-wider mt-1">
-                  {session.user.role === 'superadmin' ? 'Superadmin' : 'Admin'}
+                  {session?.user?.role === 'superadmin' ? 'Superadmin' : 'Admin'}
                 </span>
               </div>
             </div>
@@ -299,18 +304,18 @@ export default function DashboardLayout({
           {/* Desktop: User Card */}
           <div className="hidden md:block">
             <div className="flex items-center gap-3 p-3 bg-neutral-950/40 border border-neutral-850 rounded-xl mb-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center font-bold text-white text-sm shrink-0">
-                {session.user.image ? (
+              <div className="w-10 h-10 rounded-full bg-linear-to-br from-primary-500 to-accent-500 flex items-center justify-center font-bold text-white text-sm shrink-0">
+                {session?.user?.image ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={session.user.image} alt={session.user.name || ''} className="w-full h-full rounded-full object-cover" />
+                  <img src={session?.user?.image} alt={session?.user?.name || ''} className="w-full h-full rounded-full object-cover" />
                 ) : (
-                  <span>{session.user.name?.charAt(0).toUpperCase()}</span>
+                  <span>{session?.user?.name?.charAt(0).toUpperCase()}</span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-sm text-neutral-50 truncate leading-snug">{session.user.name}</p>
+                <p className="font-semibold text-sm text-neutral-50 truncate leading-snug">{session?.user?.name}</p>
                 <span className="inline-block text-[9px] font-bold uppercase rounded-full bg-primary-500/10 text-primary-300 border border-primary-500/20 px-2 py-0.5 tracking-wider mt-1">
-                  {session.user.role === 'superadmin' ? 'Superadmin' : 'Admin'}
+                  {session?.user?.role === 'superadmin' ? 'Superadmin' : 'Admin'}
                 </span>
               </div>
             </div>

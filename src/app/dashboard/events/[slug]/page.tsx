@@ -527,7 +527,7 @@ export default function ManageEventPage() {
           <div className="space-y-1">
             <p className="font-semibold text-amber-900 dark:text-amber-200">Event is in Draft Mode</p>
             <p className="text-xs text-amber-800 dark:text-amber-300/80 font-light leading-relaxed">
-              This event is not visible to the public yet. Upload your photos and click <strong>"Publish Event"</strong> when you're ready to make it live.
+              This event is not visible to the public yet. Upload your photos and click <strong>&quot;Publish Event&quot;</strong> when you&apos;re ready to make it live.
             </p>
           </div>
         </div>

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Users as UsersIcon, Loader2 } from 'lucide-react';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
 
 interface UserData {
@@ -23,22 +22,6 @@ export default function UsersPage() {
 
   const canManageUsers = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.manageUsers;
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login/admin');
-      return;
-    }
-
-    if (status === 'authenticated' && !canManageUsers) {
-      router.push('/dashboard');
-      return;
-    }
-
-    if (canManageUsers) {
-      fetchUsers();
-    }
-  }, [status, canManageUsers, router]);
-
   async function fetchUsers() {
     try {
       const res = await fetch('/api/admin/dashboard');
@@ -52,6 +35,30 @@ export default function UsersPage() {
       setIsLoading(false);
     }
   }
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    if (status === 'unauthenticated') {
+      router.push('/login/admin');
+      return;
+    }
+
+    if (status === 'authenticated' && !canManageUsers) {
+      router.push('/dashboard');
+      return;
+    }
+
+    if (canManageUsers) {
+      timer = setTimeout(() => {
+        fetchUsers();
+      }, 0);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [status, canManageUsers, router]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('id-ID', {
