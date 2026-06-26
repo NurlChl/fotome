@@ -3,19 +3,12 @@ import connectDB from '@/lib/db/mongodb';
 import { Photo, Order, OrderItem, Event, User, FaceDescriptor } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 import { getSignedDownloadUrl } from '@/lib/cloudinary';
+import { logActivity } from '@/lib/axiom';
+import { getClientIp } from '@/lib/rate-limit';
+import { getUserHardNegatives, isHardNegativeMatch, euclideanDistance, isPhotoClaimed } from '@/lib/biometrics';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
-}
-
-function euclideanDistance(a: number[], b: number[]): number {
-  if (a.length !== b.length) return Infinity;
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) {
-    const diff = a[i] - b[i];
-    sum += diff * diff;
-  }
-  return Math.sqrt(sum);
 }
 
 /**
@@ -45,7 +38,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     const isPhotographerOwner = eventObj && eventObj.photographerId && session.user.id === eventObj.photographerId.toString();
     const isBypassUser = session.user.role === 'admin' || session.user.role === 'superadmin' || !!isPhotographerOwner;
 
-    if (!isFree && !isBypassUser) {
+    // Check if photo was already claimed by the user (auto-grant access)
+    const { claimed } = await isPhotoClaimed(session.user.id, photoId);
+    const isClaimedPhoto = claimed;
+
+    if (!isFree && !isBypassUser && !isClaimedPhoto) {
       // Verify the user has purchased this photo
       const paidOrders = await Order.find({
         userId: session.user.id,
@@ -65,8 +62,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Biometric Owner Verification (except for Admin, Superadmin & Photographer Owner)
-    if (!isBypassUser) {
+    // Biometric Owner Verification (except for Admin, Superadmin, Photographer Owner, and Claimed Photos)
+    if (!isBypassUser && !isClaimedPhoto) {
       const fullUser = await User.findById(session.user.id);
       if (!fullUser || !fullUser.faceDescriptor || fullUser.faceDescriptor.length !== 128) {
         return NextResponse.json(
@@ -74,6 +71,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
           { status: 400 }
         );
       }
+
+      // Load user's hard negatives for continuous learning
+      const hardNegatives = await getUserHardNegatives(session.user.id);
 
       // Check if photo contains any faces
       const photoFaces = await FaceDescriptor.find({ photoId: photo._id });
@@ -84,7 +84,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         for (const face of photoFaces) {
           const dist = euclideanDistance(fullUser.faceDescriptor, face.descriptor);
           if (dist < lowestDistance) lowestDistance = dist;
-          if (dist <= 0.55) {
+          
+          // Check if this face matches a hard negative
+          const isHardNegative = isHardNegativeMatch(face.descriptor, hardNegatives, dist);
+          
+          // Only count as match if distance is within threshold AND not a hard negative
+          if (dist <= 0.55 && !isHardNegative) {
             hasMatch = true;
           }
         }
@@ -109,6 +114,18 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
     // Generate signed download URL (expires in 1 hour)
     const downloadUrl = getSignedDownloadUrl(photo.cloudinaryPublicId);
+
+    // Log download activity
+    const clientIp = getClientIp(req);
+    const downloadReason = isBypassUser ? 'Admin/Photographer' : isClaimedPhoto ? 'Claimed Photo' : isFree ? 'Free' : 'Purchased';
+    logActivity(
+      session.user.id,
+      'DOWNLOAD_PHOTO',
+      `Downloaded photo ID: ${photoId} from event: ${eventObj?.title || 'Unknown'} (${downloadReason})`,
+      clientIp,
+      photoId,
+      eventObj?._id?.toString()
+    );
 
     const downloadParam = req.nextUrl.searchParams.get('download');
     if (downloadParam === 'true') {

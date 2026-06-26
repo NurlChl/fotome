@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
-import { FaceDescriptor, FaceSearch } from '@/lib/db/models';
+import { FaceDescriptor, FaceSearch, FalsePositiveFlag } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 import { faceSearchSchema } from '@/lib/validation';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { getUserHardNegatives, isHardNegativeMatch } from '@/lib/biometrics';
 import mongoose from 'mongoose';
 
 /**
@@ -32,8 +33,23 @@ export async function POST(req: NextRequest) {
     }
 
     const { descriptor, eventId, threshold } = result.data;
+    const skipHardNegatives = body.skipHardNegatives === true; // For manual claim verification
 
     await connectDB();
+
+    // Fetch false positive flags for this user in this event
+    let flaggedPhotoIds: string[] = [];
+    let hardNegatives: number[][] = [];
+    if (session?.user?.id && !skipHardNegatives) {
+      const flags = await FalsePositiveFlag.find({
+        userId: session.user.id,
+        eventId,
+      }).select('photoId').lean();
+      flaggedPhotoIds = flags.map(f => f.photoId.toString());
+      
+      // Load hard negatives for continuous learning
+      hardNegatives = await getUserHardNegatives(session.user.id);
+    }
 
     // Use MongoDB Atlas Vector Search
     // This requires a vector search index named "face_vector_index"
@@ -112,9 +128,20 @@ export async function POST(req: NextRequest) {
               distance: dist,
               boundingBox: face.boundingBox,
               photo: face.photo,
+              descriptor: face.descriptor,
             };
           })
-          .filter((r) => r.distance <= maxDistance)
+          .filter((r) => {
+            // Filter by distance threshold
+            if (r.distance > maxDistance) return false;
+            
+            // Filter by hard negatives if user is logged in
+            if (hardNegatives.length > 0 && r.descriptor) {
+              return !isHardNegativeMatch(r.descriptor, hardNegatives, r.distance);
+            }
+            
+            return true;
+          })
           .sort((a, b) => a.distance - b.distance);
 
         matchingFaces = deduplicateByPhotoId(mappedResults);
@@ -128,7 +155,7 @@ export async function POST(req: NextRequest) {
         });
         if (totalInEvent > 0) {
           console.log(`Vector search returned 0 results but event has ${totalInEvent} descriptors. Running fallback manual search.`);
-          matchingFaces = await fallbackFaceSearch(descriptor, eventId, threshold);
+          matchingFaces = await fallbackFaceSearch(descriptor, eventId, threshold, hardNegatives);
         }
       }
     } catch (vectorSearchError) {
@@ -137,7 +164,15 @@ export async function POST(req: NextRequest) {
         'Vector search failed, using fallback cosine similarity:',
         vectorSearchError
       );
-      matchingFaces = await fallbackFaceSearch(descriptor, eventId, threshold);
+      matchingFaces = await fallbackFaceSearch(descriptor, eventId, threshold, hardNegatives);
+    }
+
+    // Filter out flagged photo IDs
+    if (flaggedPhotoIds.length > 0 && matchingFaces.length > 0) {
+      matchingFaces = matchingFaces.filter((r: any) => {
+        const photoIdStr = r.photo?._id?.toString() || r.photoId?.toString();
+        return !flaggedPhotoIds.includes(photoIdStr);
+      });
     }
 
     // Log the search for analytics
@@ -164,11 +199,13 @@ export async function POST(req: NextRequest) {
 /**
  * Fallback Euclidean distance search when Atlas Vector Search is not available
  * This is slower but works with any MongoDB instance
+ * Note: Hard negative filtering is applied in the main POST handler after results are returned
  */
 async function fallbackFaceSearch(
   queryDescriptor: number[],
   eventId: string,
-  threshold?: number
+  threshold?: number,
+  hardNegatives: number[][] = []
 ) {
   const faceDescriptors = await FaceDescriptor.find({
     eventId: new mongoose.Types.ObjectId(eventId),
@@ -203,9 +240,20 @@ async function fallbackFaceSearch(
         distance: dist,
         boundingBox: fd.boundingBox,
         photo: fd.photoId,
+        descriptor: fd.descriptor,
       };
     })
-    .filter((r) => r.distance <= maxDistance)
+    .filter((r) => {
+      // Filter by distance threshold
+      if (r.distance > maxDistance) return false;
+      
+      // Filter by hard negatives if available
+      if (hardNegatives.length > 0 && r.descriptor) {
+        return !isHardNegativeMatch(r.descriptor, hardNegatives, r.distance);
+      }
+      
+      return true;
+    })
     .sort((a, b) => a.distance - b.distance); // Closest matches first
 
   return deduplicateByPhotoId(results).slice(0, 50);
@@ -231,6 +279,7 @@ interface FaceSearchResult {
     height: number;
   };
   photo: PopulatedPhoto;
+  descriptor?: number[];
 }
 
 /**

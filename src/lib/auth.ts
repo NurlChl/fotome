@@ -95,6 +95,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         user.role = existingUser.role;
         user.permissions = existingUser.adminPermissions;
       }
+
+      // Log login activity
+      try {
+        const { headers } = await import('next/headers');
+        const headersList = await headers();
+        const forwarded = headersList.get('x-forwarded-for');
+        const ipAddress = forwarded ? forwarded.split(',')[0].trim() : (headersList.get('x-real-ip') || '127.0.0.1');
+
+        const { logActivity } = await import('@/lib/axiom');
+        if (user.id) {
+          await logActivity(
+            user.id,
+            'LOGIN',
+            `Logged in via ${account?.provider || 'credentials'}`,
+            ipAddress
+          );
+        }
+      } catch (err) {
+        console.error('Error logging signIn activity:', err);
+      }
+
       return true;
     },
     async jwt({ token, user, account }) {
@@ -131,6 +152,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           manageUsers: boolean;
           manageEvents: boolean;
           managePayouts: boolean;
+          manageLogs: boolean;
         } | undefined;
       }
       return session;

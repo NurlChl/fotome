@@ -8,9 +8,18 @@ export interface IOrder extends Document {
   userId: mongoose.Types.ObjectId;
   orderNumber: string;
   totalAmount: number;
-  status: 'pending' | 'paid' | 'failed' | 'refunded';
+  discountAmount: number;
+  voucherId?: mongoose.Types.ObjectId;
+  status: 'pending' | 'paid' | 'failed' | 'refunded' | 'cancelled';
+  paymentStatus?: 'pending' | 'completed' | 'failed' | 'cancelled';
+  paymentMethod?: string;
   midtransTransactionId?: string;
   midtransSnapToken?: string;
+  midtransRedirectUrl?: string;
+  midtransTransactionStatus?: string;
+  midtransFraudStatus?: string;
+  midtransPaymentType?: string;
+  midtransTransactionTime?: string;
   paymentDetails?: Record<string, unknown>;
   paidAt?: Date;
   createdAt: Date;
@@ -36,14 +45,36 @@ const orderSchema = new Schema<IOrder>(
       required: true,
       min: 0,
     },
+    discountAmount: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+    },
+    voucherId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Voucher',
+      default: null,
+    },
     status: {
       type: String,
-      enum: ['pending', 'paid', 'failed', 'refunded'],
+      enum: ['pending', 'paid', 'failed', 'refunded', 'cancelled'],
       default: 'pending',
       index: true,
     },
+    paymentStatus: {
+      type: String,
+      enum: ['pending', 'completed', 'failed', 'cancelled'],
+      default: 'pending',
+    },
+    paymentMethod: String,
     midtransTransactionId: String,
     midtransSnapToken: String,
+    midtransRedirectUrl: String,
+    midtransTransactionStatus: String,
+    midtransFraudStatus: String,
+    midtransPaymentType: String,
+    midtransTransactionTime: String,
     paymentDetails: {
       type: Schema.Types.Mixed,
       default: {},

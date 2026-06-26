@@ -15,7 +15,7 @@ export default function Footer() {
               <div className="w-7.5 h-7.5 rounded-lg bg-primary-600 flex items-center justify-center shadow-md shadow-primary-600/10 transition-transform duration-150">
                 <Camera className="w-4.5 h-4.5 text-white" />
               </div>
-              <span className="font-display font-bold text-base tracking-tight text-white transition duration-150">
+              <span className="font-display font-bold text-base tracking-tight text-neutral-50 transition duration-150">
                 FotoMe
               </span>
             </Link>
@@ -26,7 +26,7 @@ export default function Footer() {
 
           {/* Links */}
           <div className="space-y-4">
-            <h4 className="text-white text-xs font-bold uppercase tracking-wider">Platform</h4>
+            <h4 className="text-neutral-50 text-xs font-bold uppercase tracking-wider">Platform</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href="/events" className="hover:text-neutral-50 transition duration-150">Explore Events</Link></li>
               <li><Link href="/pricing" className="hover:text-neutral-50 transition duration-150">Pricing</Link></li>
@@ -34,7 +34,7 @@ export default function Footer() {
           </div>
 
           <div className="space-y-4">
-            <h4 className="text-white text-xs font-bold uppercase tracking-wider">Support</h4>
+            <h4 className="text-neutral-50 text-xs font-bold uppercase tracking-wider">Support</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href="/help" className="hover:text-neutral-50 transition duration-150">Help Center</Link></li>
               <li><Link href="/privacy" className="hover:text-neutral-50 transition duration-150">Privacy Policy</Link></li>
@@ -43,7 +43,7 @@ export default function Footer() {
           </div>
 
           <div className="space-y-4">
-            <h4 className="text-white text-xs font-bold uppercase tracking-wider">Company</h4>
+            <h4 className="text-neutral-50 text-xs font-bold uppercase tracking-wider">Company</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href="/about" className="hover:text-neutral-50 transition duration-150">About Us</Link></li>
               <li><Link href="/contact" className="hover:text-neutral-50 transition duration-150">Contact</Link></li>

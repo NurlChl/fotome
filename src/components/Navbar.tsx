@@ -104,16 +104,6 @@ export default function Navbar() {
           <Link href="/how-it-works" className="text-sm text-neutral-300 hover:text-neutral-100 transition duration-150">
             Cara Kerja
           </Link>
-          {hasEventUploaderAccess && (
-            <Link href="/dashboard" className="text-sm text-neutral-300 hover:text-neutral-100 transition duration-150">
-              Upload Dashboard
-            </Link>
-          )}
-          {hasAdminAccess && (
-            <Link href="/dashboard/admin" className="text-sm text-neutral-300 hover:text-neutral-100 transition duration-150 flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-primary-500" /> Admin Console
-            </Link>
-          )}
         </div>
 
         {/* Right Section */}
@@ -258,24 +248,6 @@ export default function Navbar() {
           >
             Cara Kerja
           </Link>
-          {hasEventUploaderAccess && (
-            <Link
-              href="/dashboard"
-              className="text-neutral-300 hover:text-neutral-50 py-2 text-sm font-medium border-b border-neutral-900"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Upload Dashboard
-            </Link>
-          )}
-          {hasAdminAccess && (
-            <Link
-              href="/dashboard/admin"
-              className="text-neutral-300 hover:text-neutral-50 py-2 text-sm font-medium border-b border-neutral-900 flex items-center gap-1.5"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              <ShieldAlert className="w-4 h-4 text-primary-400" /> Admin Console
-            </Link>
-          )}
           {!session ? (
             <div className="flex flex-col gap-2 pt-2">
               <Link

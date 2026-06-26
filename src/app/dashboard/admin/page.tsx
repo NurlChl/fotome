@@ -21,7 +21,8 @@ import {
   AlertTriangle,
   Edit2,
   Trash2,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 
 interface UserData {
@@ -71,6 +72,7 @@ interface AdminData {
     manageUsers: boolean;
     manageEvents: boolean;
     managePayouts: boolean;
+    manageLogs: boolean;
   };
   createdAt: string;
 }
@@ -86,7 +88,31 @@ interface AdminStats {
   completedPayouts: number;
 }
 
-type TabType = 'overview' | 'users' | 'events' | 'payouts' | 'admins';
+type TabType = 'overview' | 'users' | 'events' | 'payouts' | 'admins' | 'claims';
+
+interface ClaimData {
+  _id: string;
+  userId?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  eventId: {
+    _id: string;
+    title: string;
+    slug: string;
+  };
+  photoId?: {
+    _id: string;
+    watermarkedUrl: string;
+    thumbnailUrl: string;
+  };
+  selfieUrl?: string;
+  ipAddress?: string;
+  isMatched: boolean;
+  type?: 'biometric' | 'override' | 'false_positive';
+  createdAt: string;
+}
 
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
@@ -101,6 +127,8 @@ export default function AdminDashboard() {
   const [payouts, setPayouts] = useState<PayoutData[]>([]);
   const [events, setEvents] = useState<EventData[]>([]);
   const [admins, setAdmins] = useState<AdminData[]>([]);
+  const [claims, setClaims] = useState<ClaimData[]>([]);
+  const [claimsLoading, setClaimsLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
 
@@ -111,6 +139,7 @@ export default function AdminDashboard() {
   const [permUsers, setPermUsers] = useState(false);
   const [permEvents, setPermEvents] = useState(false);
   const [permPayouts, setPermPayouts] = useState(false);
+  const [permLogs, setPermLogs] = useState(false);
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [adminSuccess, setAdminSuccess] = useState('');
   const [adminError, setAdminError] = useState('');
@@ -123,6 +152,7 @@ export default function AdminDashboard() {
   const [editPermUsers, setEditPermUsers] = useState(false);
   const [editPermEvents, setEditPermEvents] = useState(false);
   const [editPermPayouts, setEditPermPayouts] = useState(false);
+  const [editPermLogs, setEditPermLogs] = useState(false);
   const [isUpdatingAdmin, setIsUpdatingAdmin] = useState(false);
 
   // Access Roles & Permissions Flags
@@ -130,6 +160,7 @@ export default function AdminDashboard() {
   const canManageUsers = isSuperadmin || !!session?.user?.permissions?.manageUsers;
   const canManageEvents = isSuperadmin || !!session?.user?.permissions?.manageEvents;
   const canManagePayouts = isSuperadmin || !!session?.user?.permissions?.managePayouts;
+  const canManageLogs = isSuperadmin || !!session?.user?.permissions?.manageLogs;
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -153,6 +184,13 @@ export default function AdminDashboard() {
       fetchAdminsList();
     }
   }, [activeTab, isSuperadmin]);
+
+  // Fetch claims list when claims tab is selected
+  useEffect(() => {
+    if (activeTab === 'claims') {
+      fetchClaimsList();
+    }
+  }, [activeTab]);
 
   async function fetchAdminData() {
     try {
@@ -180,6 +218,21 @@ export default function AdminDashboard() {
       }
     } catch (error) {
       console.error('Error fetching admins:', error);
+    }
+  }
+
+  async function fetchClaimsList() {
+    setClaimsLoading(true);
+    try {
+      const res = await fetch('/api/admin/claims');
+      const data = await res.json();
+      if (res.ok) {
+        setClaims(data.claims || []);
+      }
+    } catch (error) {
+      console.error('Error fetching claims:', error);
+    } finally {
+      setClaimsLoading(false);
     }
   }
 
@@ -233,6 +286,7 @@ export default function AdminDashboard() {
             manageUsers: permUsers,
             manageEvents: permEvents,
             managePayouts: permPayouts,
+            manageLogs: permLogs,
           },
         }),
       });
@@ -247,6 +301,7 @@ export default function AdminDashboard() {
         setPermUsers(false);
         setPermEvents(false);
         setPermPayouts(false);
+        setPermLogs(false);
         fetchAdminsList();
       } else {
         throw new Error(data.error || 'Failed to create admin');
@@ -265,6 +320,7 @@ export default function AdminDashboard() {
     setEditPermUsers(admin.adminPermissions?.manageUsers || false);
     setEditPermEvents(admin.adminPermissions?.manageEvents || false);
     setEditPermPayouts(admin.adminPermissions?.managePayouts || false);
+    setEditPermLogs(admin.adminPermissions?.manageLogs || false);
     setIsEditModalOpen(true);
   };
 
@@ -288,6 +344,7 @@ export default function AdminDashboard() {
             manageUsers: editPermUsers,
             manageEvents: editPermEvents,
             managePayouts: editPermPayouts,
+            manageLogs: editPermLogs,
           },
         }),
       });
@@ -463,6 +520,19 @@ export default function AdminDashboard() {
               onClick={() => setActiveTab('admins')}
             >
               <span className="flex items-center gap-2"><Settings className="w-4 h-4" /> Admins</span>
+            </button>
+          )}
+
+          {(isSuperadmin || canManageUsers) && (
+            <button 
+              className={`px-4 py-2.5 text-sm font-medium rounded-lg transition duration-200 ${
+                activeTab === 'claims' 
+                  ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20' 
+                  : 'text-neutral-300 hover:text-neutral-50 hover:bg-neutral-900/50'
+              }`}
+              onClick={() => setActiveTab('claims')}
+            >
+              <span className="flex items-center gap-2"><ShieldAlert className="w-4 h-4" /> Claims Log</span>
             </button>
           )}
         </div>
@@ -790,6 +860,12 @@ export default function AdminDashboard() {
                                 </span>
                                 <span className="text-neutral-400">Payouts</span>
                               </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={adm.adminPermissions?.manageLogs ? 'text-emerald-500' : 'text-rose-500'}>
+                                  {adm.adminPermissions?.manageLogs ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                                </span>
+                                <span className="text-neutral-400">Activity Logs</span>
+                              </div>
                             </div>
                           )}
                         </td>
@@ -912,6 +988,15 @@ export default function AdminDashboard() {
                       />
                       <span>Payouts</span>
                     </label>
+                    <label className="flex items-center justify-center gap-2 px-3 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-sm text-neutral-300 cursor-pointer hover:bg-neutral-900/50 hover:border-neutral-800 transition duration-200">
+                      <input 
+                        type="checkbox" 
+                        className="rounded accent-primary-500 text-primary-600 focus:ring-primary-500 bg-neutral-950 border-neutral-900" 
+                        checked={permLogs} 
+                        onChange={(e) => setPermLogs(e.target.checked)} 
+                      />
+                      <span>Activity Logs</span>
+                    </label>
                   </div>
                 </div>
 
@@ -923,6 +1008,108 @@ export default function AdminDashboard() {
                   {isCreatingAdmin ? 'Creating...' : 'Create Admin Account'}
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: CLAIMS */}
+        {activeTab === 'claims' && (
+          <div className="space-y-6 animate-fadeIn">
+            <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-6 border-b border-neutral-900 pb-3">
+                <h2 className="text-lg font-bold text-neutral-50 flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-primary-500" /> Manual & Biometric Photo Claims Log
+                </h2>
+                <span className="badge badge-primary">{claims.length} entries</span>
+              </div>
+
+              {claimsLoading ? (
+                <div className="flex flex-col items-center py-12 gap-3 text-neutral-500 text-sm">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+                  <span>Loading claims log...</span>
+                </div>
+              ) : claims.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-900 text-neutral-400 text-xs uppercase font-medium">
+                        <th className="pb-3 pr-4 pl-2">User / Account</th>
+                        <th className="pb-3 pr-4">Event</th>
+                        <th className="pb-3 pr-4">Target Photo</th>
+                        <th className="pb-3 pr-4">Verification Selfie</th>
+                        <th className="pb-3 pr-4">IP Address</th>
+                        <th className="pb-3 pr-4">Type</th>
+                        <th className="pb-3">Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-900">
+                      {claims.map((claim) => (
+                        <tr key={claim._id} className="text-neutral-300 hover:bg-neutral-900/10">
+                          <td className="py-4 pr-4 pl-2">
+                            <div className="font-semibold text-neutral-50">{claim.userId?.name || 'Unknown User'}</div>
+                            <div className="text-xs text-neutral-500 mt-0.5">{claim.userId?.email || 'No Email'}</div>
+                          </td>
+                          <td className="py-4 pr-4">
+                            <div className="font-medium text-neutral-200">{claim.eventId?.title || 'Unknown Event'}</div>
+                            <div className="text-xs text-neutral-500 mt-0.5 font-mono">/{claim.eventId?.slug || ''}</div>
+                          </td>
+                          <td className="py-4 pr-4">
+                            {claim.photoId ? (
+                              <div className="w-14 h-14 rounded-lg overflow-hidden border border-neutral-800 bg-neutral-950">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img 
+                                  src={claim.photoId.thumbnailUrl || claim.photoId.watermarkedUrl} 
+                                  alt="Target Photo" 
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-neutral-500 text-xs italic">Deleted Photo</span>
+                            )}
+                          </td>
+                          <td className="py-4 pr-4">
+                            {claim.selfieUrl ? (
+                              <div className="w-14 h-14 rounded-lg overflow-hidden border border-neutral-850 bg-neutral-950">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img 
+                                  src={claim.selfieUrl} 
+                                  alt="Selfie Verification" 
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-neutral-500 text-xs italic">No Selfie (Flagged)</span>
+                            )}
+                          </td>
+                          <td className="py-4 pr-4 font-mono text-xs text-neutral-300">
+                            {claim.ipAddress || '-'}
+                          </td>
+                          <td className="py-4 pr-4">
+                            <span className={`text-[10px] px-2 py-0.5 font-bold uppercase rounded-full tracking-wider border ${
+                              claim.type === 'biometric' 
+                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' 
+                                : claim.type === 'override'
+                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                            }`}>
+                              {claim.type === 'biometric' 
+                                ? 'Biometric Match' 
+                                : claim.type === 'override'
+                                ? 'Manual Override'
+                                : 'False Positive Flag'}
+                            </span>
+                          </td>
+                          <td className="py-4 text-xs text-neutral-500">
+                            {new Date(claim.createdAt).toLocaleString('id-ID')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-neutral-500 text-sm">No manual or biometric photo claims logged yet.</div>
+              )}
             </div>
           </div>
         )}
@@ -1012,6 +1199,15 @@ export default function AdminDashboard() {
                         className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
                       />
                       <span className="text-sm text-neutral-300">Payouts</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={editPermLogs} 
+                        onChange={(e) => setEditPermLogs(e.target.checked)} 
+                        className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-neutral-300">Activity Logs</span>
                     </label>
                   </div>
                 </div>

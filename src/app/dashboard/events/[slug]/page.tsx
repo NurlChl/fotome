@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, Loader2, Upload, Trash2, CheckCircle2, XCircle, Clock, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, Trash2, CheckCircle2, XCircle, Clock, ImageIcon, AlertCircle, X } from 'lucide-react';
 import { loadModels, detectAllFacesInImage, FaceData } from '@/lib/faceDetector';
 
 interface UploadFile {
@@ -22,6 +22,24 @@ interface EventData {
   photoCount: number;
   status: 'draft' | 'published' | 'archived';
   coverImage?: string;
+  pricePerPhoto: number;
+  eventDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface VoucherData {
+  _id: string;
+  name: string;
+  description?: string;
+  usageLimitPerUser?: number;
+  allowedUserIds?: string[];
+  minPhotos: number;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  status: 'draft' | 'published';
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function ManageEventPage() {
@@ -40,10 +58,36 @@ export default function ManageEventPage() {
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  
+  // Event details editing state
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editPricePerPhoto, setEditPricePerPhoto] = useState('');
+  const [editEventDate, setEditEventDate] = useState('');
+  const [isSavingDetails, setIsSavingDetails] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const thumbnailInputRef = useRef<HTMLInputElement>(null);
-
+  // Voucher management state
+  const [vouchers, setVouchers] = useState<VoucherData[]>([]);
+  const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
+  const [editingVoucher, setEditingVoucher] = useState<VoucherData | null>(null);
+  const [voucherForm, setVoucherForm] = useState({
+    name: '',
+    description: '',
+    usageLimitPerUser: '',
+    useAllowedUsers: false,
+    allowedUsers: [] as { _id: string; name: string; email: string }[],
+    minPhotos: '1',
+    discountType: 'percentage' as 'percentage' | 'fixed',
+    discountValue: '',
+    status: 'draft' as 'draft' | 'published',
+  });
+  const [isSavingVoucher, setIsSavingVoucher] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
+  const [voucherFormErrors, setVoucherFormErrors] = useState<Record<string, string>>({});
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ _id: string; name: string; email: string }[]>([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [uploadedPhotos, setUploadedPhotos] = useState<{
     _id: string;
     watermarkedUrl: string;
@@ -57,6 +101,24 @@ export default function ManageEventPage() {
   const [hasMorePhotos, setHasMorePhotos] = useState(false);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const userSearchRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userSearchRef.current && !userSearchRef.current.contains(event.target as Node)) {
+        setShowUserDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const fetchUploadedPhotos = useCallback(async (page = 1, append = false) => {
     setIsLoadingPhotos(true);
@@ -119,6 +181,13 @@ export default function ManageEventPage() {
         if (data.event.coverImage) {
           setThumbnailPreview(data.event.coverImage);
         }
+        // Initialize edit form state
+        setEditTitle(data.event.title);
+        setEditPricePerPhoto(data.event.pricePerPhoto.toString());
+        // Format date for input
+        const eventDate = new Date(data.event.eventDate);
+        const formattedDate = eventDate.toISOString().split('T')[0];
+        setEditEventDate(formattedDate);
       }
     }
     fetchEvent();
@@ -127,6 +196,224 @@ export default function ManageEventPage() {
     }, 0);
     return () => clearTimeout(timer);
   }, [slug, fetchUploadedPhotos]);
+
+  // Fetch vouchers
+  const fetchVouchers = useCallback(async () => {
+    const res = await fetch(`/api/events/${slug}/vouchers`);
+    const data = await res.json();
+    if (res.ok) {
+      setVouchers(data.vouchers || []);
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    fetchVouchers();
+  }, [fetchVouchers]);
+
+  // Search users
+  const searchUsers = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowUserDropdown(false);
+      return;
+    }
+
+    setIsSearchingUsers(true);
+    try {
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (res.ok) {
+        setSearchResults(data.users || []);
+        setShowUserDropdown(true);
+      }
+    } catch (error) {
+      console.error('Error searching users:', error);
+    } finally {
+      setIsSearchingUsers(false);
+    }
+  }, []);
+
+  // Toggle user selection
+  const toggleUserSelection = useCallback((user: { _id: string; name: string; email: string }) => {
+    setVoucherForm(prev => {
+      const isSelected = prev.allowedUsers.some(u => u._id === user._id);
+      return {
+        ...prev,
+        allowedUsers: isSelected
+          ? prev.allowedUsers.filter(u => u._id !== user._id)
+          : [...prev.allowedUsers, user]
+      };
+    });
+  }, []);
+
+  // Remove selected user
+  const removeUser = useCallback((userId: string) => {
+    setVoucherForm(prev => ({
+      ...prev,
+      allowedUsers: prev.allowedUsers.filter(u => u._id !== userId)
+    }));
+  }, []);
+
+  // Open voucher modal for create/edit
+  const openVoucherModal = useCallback(async (voucher?: VoucherData) => {
+    setVoucherError('');
+    setVoucherFormErrors({});
+    
+    if (voucher) {
+      setEditingVoucher(voucher);
+      
+      // Fetch user details if there are allowedUserIds
+      let allowedUsers: { _id: string; name: string; email: string }[] = [];
+      if (voucher.allowedUserIds && voucher.allowedUserIds.length > 0) {
+        try {
+          const res = await fetch('/api/users/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userIds: voucher.allowedUserIds })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            allowedUsers = data.users || [];
+          }
+        } catch (err) {
+          console.error('Error fetching users:', err);
+        }
+      }
+      
+      setVoucherForm({
+        name: voucher.name,
+        description: voucher.description || '',
+        usageLimitPerUser: voucher.usageLimitPerUser ? voucher.usageLimitPerUser.toString() : '',
+        useAllowedUsers: voucher.allowedUserIds && voucher.allowedUserIds.length > 0,
+        allowedUsers,
+        minPhotos: voucher.minPhotos.toString(),
+        discountType: voucher.discountType,
+        discountValue: voucher.discountValue.toString(),
+        status: voucher.status,
+      });
+    } else {
+      setEditingVoucher(null);
+      setVoucherForm({
+        name: '',
+        description: '',
+        usageLimitPerUser: '',
+        useAllowedUsers: false,
+        allowedUsers: [],
+        minPhotos: '1',
+        discountType: 'percentage',
+        discountValue: '',
+        status: 'draft',
+      });
+    }
+    setIsVoucherModalOpen(true);
+  }, []);
+
+  // Validate voucher form
+  const validateVoucherForm = useCallback(() => {
+    const errors: Record<string, string> = {};
+    
+    if (!voucherForm.name.trim()) {
+      errors.name = 'Nama voucher wajib diisi';
+    }
+    
+    // Validate minPhotos
+    const minPhotosVal = Number(voucherForm.minPhotos);
+    if (!voucherForm.minPhotos || isNaN(minPhotosVal) || minPhotosVal < 1) {
+      errors.minPhotos = 'Minimal foto minimal 1';
+    }
+    
+    // Validate discountValue
+    const discountVal = Number(voucherForm.discountValue);
+    if (!voucherForm.discountValue || isNaN(discountVal)) {
+      errors.discountValue = 'Nilai diskon wajib diisi';
+    } else if (discountVal < 1) {
+      errors.discountValue = 'Nilai diskon minimal 1';
+    } else if (voucherForm.discountType === 'percentage' && discountVal > 100) {
+      errors.discountValue = 'Persentase diskon maksimal 100';
+    }
+    
+    // Validate usageLimitPerUser
+    if (voucherForm.usageLimitPerUser) {
+      const usageLimitVal = Number(voucherForm.usageLimitPerUser);
+      if (isNaN(usageLimitVal) || usageLimitVal < 1) {
+        errors.usageLimitPerUser = 'Batas penggunaan minimal 1';
+      }
+    }
+    
+    setVoucherFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [voucherForm]);
+
+  // Save voucher
+  const saveVoucher = useCallback(async () => {
+    if (!validateVoucherForm()) {
+      return;
+    }
+    
+    setIsSavingVoucher(true);
+    setVoucherError('');
+    try {
+      const body = {
+        name: voucherForm.name,
+        description: voucherForm.description,
+        usageLimitPerUser: voucherForm.usageLimitPerUser ? Number(voucherForm.usageLimitPerUser) : null,
+        allowedUserIds: voucherForm.useAllowedUsers ? voucherForm.allowedUsers.map(u => u._id) : [],
+        minPhotos: Number(voucherForm.minPhotos),
+        discountType: voucherForm.discountType,
+        discountValue: Number(voucherForm.discountValue),
+        status: voucherForm.status,
+      };
+
+      let res;
+      if (editingVoucher) {
+        res = await fetch(`/api/events/${slug}/vouchers/${editingVoucher._id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } else {
+        res = await fetch(`/api/events/${slug}/vouchers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      }
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save voucher');
+      }
+
+      await fetchVouchers();
+      setIsVoucherModalOpen(false);
+    } catch (err) {
+      setVoucherError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsSavingVoucher(false);
+    }
+  }, [voucherForm, editingVoucher, slug, validateVoucherForm, fetchVouchers]);
+
+  // Delete voucher
+  const deleteVoucher = useCallback(async (voucherId: string) => {
+    if (!confirm('Are you sure you want to delete this voucher?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/events/${slug}/vouchers/${voucherId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to delete voucher');
+      }
+
+      await fetchVouchers();
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Something went wrong');
+    }
+  }, [slug, fetchVouchers]);
 
   const addFiles = useCallback((newFiles: File[]) => {
     const uploadFiles: UploadFile[] = newFiles.map((file) => ({
@@ -434,6 +721,34 @@ export default function ManageEventPage() {
     }
   };
 
+  const handleSaveDetails = async () => {
+    if (!event) return;
+    setIsSavingDetails(true);
+    setPublishError('');
+    try {
+      const updateData: any = {
+        title: editTitle,
+        pricePerPhoto: Number(editPricePerPhoto),
+        eventDate: editEventDate,
+      };
+      const res = await fetch(`/api/events/${slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update event details');
+      }
+      setEvent(data.event);
+      setIsEditingDetails(false);
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsSavingDetails(false);
+    }
+  };
+
   const successCount = files.filter((f) => f.status === 'success').length;
   const failedCount = files.filter((f) => f.status === 'failed').length;
   const pendingCount = files.filter((f) => f.status === 'pending').length;
@@ -604,6 +919,467 @@ export default function ManageEventPage() {
           </div>
         </div>
       </div>
+
+      {/* Event Details Section */}
+      <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-neutral-50 flex items-center gap-2">
+              Event Details
+            </h3>
+            <p className="text-xs text-neutral-500 mt-1 font-light">
+              Edit your event's title and pricing.
+            </p>
+          </div>
+          {!isEditingDetails ? (
+            <button
+              onClick={() => setIsEditingDetails(true)}
+              className="btn btn-secondary rounded-xl py-2 px-4 text-xs font-semibold"
+            >
+              Edit Details
+            </button>
+          ) : null}
+        </div>
+
+        {isEditingDetails ? (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-neutral-300 mb-1 block">Event Title</label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-neutral-300 mb-1 block">Event Date</label>
+              <input
+                type="date"
+                value={editEventDate}
+                onChange={(e) => setEditEventDate(e.target.value)}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-neutral-300 mb-1 block">Price per Photo (Rp)</label>
+              <input
+                type="number"
+                value={editPricePerPhoto}
+                onChange={(e) => setEditPricePerPhoto(e.target.value)}
+                min="0"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleSaveDetails}
+                disabled={isSavingDetails}
+                className="btn btn-primary rounded-xl py-2 px-5 text-xs font-semibold flex items-center gap-2"
+              >
+                {isSavingDetails ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditingDetails(false);
+                  if (event) {
+                    setEditTitle(event.title);
+                    setEditPricePerPhoto(event.pricePerPhoto.toString());
+                    const eventDate = new Date(event.eventDate);
+                    const formattedDate = eventDate.toISOString().split('T')[0];
+                    setEditEventDate(formattedDate);
+                  }
+                }}
+                disabled={isSavingDetails}
+                className="btn btn-ghost rounded-xl py-2 px-5 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-neutral-500">Event Title</span>
+              <span className="text-sm font-medium text-neutral-100">{event.title}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-neutral-500">Event Date</span>
+              <span className="text-sm font-medium text-neutral-100">{new Date(event.eventDate).toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-neutral-500">Price per Photo</span>
+              <span className="text-sm font-medium text-neutral-100">Rp {event.pricePerPhoto.toLocaleString('id-ID')}</span>
+            </div>
+            <div className="pt-2 border-t border-neutral-800">
+              <div className="flex justify-between items-center text-[10px] text-neutral-500">
+                <span>Created at: {new Date(event.createdAt).toLocaleString('id-ID')}</span>
+                <span>Updated at: {new Date(event.updatedAt).toLocaleString('id-ID')}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Vouchers Section */}
+      <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-neutral-50 flex items-center gap-2">
+              Vouchers
+            </h3>
+            <p className="text-xs text-neutral-500 mt-1 font-light">
+              Manage vouchers for your event. Only available for paid events.
+            </p>
+          </div>
+          {event.pricePerPhoto > 0 && (
+            <button
+              onClick={() => openVoucherModal()}
+              className="btn btn-primary rounded-xl py-2 px-4 text-xs font-semibold"
+            >
+              + Add Voucher
+            </button>
+          )}
+        </div>
+
+        {event.pricePerPhoto <= 0 ? (
+          <div className="text-center py-4 text-xs text-neutral-500">
+            Vouchers can only be created for events with paid photos.
+          </div>
+        ) : vouchers.length === 0 ? (
+          <div className="text-center py-4 text-xs text-neutral-500">
+            No vouchers created yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {vouchers.map((voucher) => (
+              <div
+                key={voucher._id}
+                className="bg-neutral-950/40 border border-neutral-800 rounded-xl p-4"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-neutral-50">{voucher.name}</h4>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 font-bold uppercase rounded-full tracking-wider border ${
+                          voucher.status === 'published'
+                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                            : 'bg-neutral-800 text-neutral-400 border-neutral-700'
+                        }`}
+                      >
+                        {voucher.status}
+                      </span>
+                    </div>
+                    {voucher.description && (
+                      <p className="text-xs text-neutral-500 mt-1">{voucher.description}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openVoucherModal(voucher)}
+                      className="text-xs text-neutral-400 hover:text-neutral-100"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteVoucher(voucher._id)}
+                      className="text-xs text-rose-400 hover:text-rose-300"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-neutral-400">
+                  <div>
+                    <span className="block text-neutral-500">Discount</span>
+                    <span className="font-semibold">
+                      {voucher.discountType === 'percentage'
+                        ? `${voucher.discountValue}%`
+                        : `Rp ${voucher.discountValue.toLocaleString('id-ID')}`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-neutral-500">Min Photos</span>
+                    <span className="font-semibold">{voucher.minPhotos}</span>
+                  </div>
+                  {voucher.usageLimitPerUser && (
+                    <div>
+                      <span className="block text-neutral-500">Usage/ User</span>
+                      <span className="font-semibold">{voucher.usageLimitPerUser}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Voucher Modal */}
+      {isVoucherModalOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold text-neutral-50 mb-4">
+              {editingVoucher ? 'Edit Voucher' : 'Add Voucher'}
+            </h3>
+            
+            {voucherError && (
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs p-3 rounded-xl mb-4 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                <span>{voucherError}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 mb-1 block">Voucher Name *</label>
+                <input
+                  type="text"
+                  value={voucherForm.name}
+                  onChange={(e) => {
+                    setVoucherForm({ ...voucherForm, name: e.target.value });
+                    if (voucherFormErrors.name) {
+                      setVoucherFormErrors({ ...voucherFormErrors, name: '' });
+                    }
+                  }}
+                  className={`w-full bg-neutral-950 border rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 ${voucherFormErrors.name ? 'border-rose-500' : 'border-neutral-800'}`}
+                  placeholder="Voucher Name"
+                />
+                {voucherFormErrors.name && (
+                  <p className="text-rose-400 text-xs mt-1">{voucherFormErrors.name}</p>
+                )}
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 mb-1 block">Description (Optional)</label>
+                <textarea
+                  value={voucherForm.description}
+                  onChange={(e) =>
+                    setVoucherForm({ ...voucherForm, description: e.target.value })
+                  }
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+                  placeholder="Terms and conditions"
+                  rows={2}
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 mb-1 block">Discount Type *</label>
+                  <select
+                    value={voucherForm.discountType}
+                    onChange={(e) => {
+                      setVoucherForm({ ...voucherForm, discountType: e.target.value as 'percentage' | 'fixed' });
+                      if (voucherFormErrors.discountValue) {
+                        setVoucherFormErrors({ ...voucherFormErrors, discountValue: '' });
+                      }
+                    }}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+                  >
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed Amount (Rp)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 mb-1 block">
+                    Discount Value *
+                    {voucherForm.discountType === 'percentage' && ' (1-100)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={voucherForm.discountValue}
+                    onChange={(e) => {
+                      setVoucherForm({ ...voucherForm, discountValue: e.target.value });
+                      if (voucherFormErrors.discountValue) {
+                        setVoucherFormErrors({ ...voucherFormErrors, discountValue: '' });
+                      }
+                    }}
+                    min="1"
+                    max={voucherForm.discountType === 'percentage' ? 100 : undefined}
+                    className={`w-full bg-neutral-950 border rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 ${voucherFormErrors.discountValue ? 'border-rose-500' : 'border-neutral-800'}`}
+                    placeholder={voucherForm.discountType === 'percentage' ? '10' : '10000'}
+                  />
+                  {voucherFormErrors.discountValue && (
+                    <p className="text-rose-400 text-xs mt-1">{voucherFormErrors.discountValue}</p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 mb-1 block">
+                    Min Photos to Purchase *
+                  </label>
+                  <input
+                    type="number"
+                    value={voucherForm.minPhotos}
+                    onChange={(e) => {
+                      setVoucherForm({ ...voucherForm, minPhotos: e.target.value });
+                      if (voucherFormErrors.minPhotos) {
+                        setVoucherFormErrors({ ...voucherFormErrors, minPhotos: '' });
+                      }
+                    }}
+                    min="1"
+                    className={`w-full bg-neutral-950 border rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 ${voucherFormErrors.minPhotos ? 'border-rose-500' : 'border-neutral-800'}`}
+                  />
+                  {voucherFormErrors.minPhotos && (
+                    <p className="text-rose-400 text-xs mt-1">{voucherFormErrors.minPhotos}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 mb-1 block">
+                    Usage Limit per User (Optional)
+                  </label>
+                  <input
+                    type="number"
+                    value={voucherForm.usageLimitPerUser}
+                    onChange={(e) => {
+                      setVoucherForm({ ...voucherForm, usageLimitPerUser: e.target.value });
+                      if (voucherFormErrors.usageLimitPerUser) {
+                        setVoucherFormErrors({ ...voucherFormErrors, usageLimitPerUser: '' });
+                      }
+                    }}
+                    min="1"
+                    placeholder="No limit"
+                    className={`w-full bg-neutral-950 border rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 ${voucherFormErrors.usageLimitPerUser ? 'border-rose-500' : 'border-neutral-800'}`}
+                  />
+                  {voucherFormErrors.usageLimitPerUser && (
+                    <p className="text-rose-400 text-xs mt-1">{voucherFormErrors.usageLimitPerUser}</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="useAllowedUsers"
+                    checked={voucherForm.useAllowedUsers}
+                    onChange={(e) =>
+                      setVoucherForm({ ...voucherForm, useAllowedUsers: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded border-neutral-700 bg-neutral-950 text-primary-600 focus:ring-primary-500/50 focus:ring-2"
+                  />
+                  <label htmlFor="useAllowedUsers" className="text-xs font-semibold text-neutral-300">
+                    Restrict to specific users
+                  </label>
+                </div>
+
+                {voucherForm.useAllowedUsers && (
+                  <div className="space-y-2" ref={userSearchRef}>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={userSearchQuery}
+                        onChange={(e) => {
+                          setUserSearchQuery(e.target.value);
+                          searchUsers(e.target.value);
+                        }}
+                        onFocus={() => setShowUserDropdown(true)}
+                        placeholder="Search users by name or email..."
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+                      />
+                      {isSearchingUsers && (
+                        <div className="absolute right-3 top-3">
+                          <Loader2 className="w-4 h-4 animate-spin text-neutral-500" />
+                        </div>
+                      )}
+
+                      {showUserDropdown && searchResults.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-neutral-950 border border-neutral-800 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                          {searchResults.map((user) => {
+                            const isSelected = voucherForm.allowedUsers.some(u => u._id === user._id);
+                            return (
+                              <div
+                                key={user._id}
+                                onClick={() => toggleUserSelection(user)}
+                                className={`px-4 py-3 cursor-pointer transition ${
+                                  isSelected
+                                    ? 'bg-primary-500/10 text-primary-300'
+                                    : 'hover:bg-neutral-900/50'
+                                }`}
+                              >
+                                <div className="text-sm font-medium">{user.name}</div>
+                                <div className="text-xs text-neutral-500">{user.email}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {voucherForm.allowedUsers.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {voucherForm.allowedUsers.map((user) => (
+                          <div
+                            key={user._id}
+                            className="bg-neutral-800 text-neutral-200 px-3 py-1 rounded-full text-xs flex items-center gap-2"
+                          >
+                            {user.name}
+                            <button
+                              onClick={() => removeUser(user._id)}
+                              className="hover:text-rose-400 transition"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 mb-1 block">Status *</label>
+                <select
+                  value={voucherForm.status}
+                  onChange={(e) =>
+                    setVoucherForm({ ...voucherForm, status: e.target.value as 'draft' | 'published' })
+                  }
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-neutral-100 placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={saveVoucher}
+                disabled={isSavingVoucher}
+                className="btn btn-primary rounded-xl py-2 px-5 text-xs font-semibold flex-1 flex items-center justify-center gap-2"
+              >
+                {isSavingVoucher ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  'Save Voucher'
+                )}
+              </button>
+              <button
+                onClick={() => setIsVoucherModalOpen(false)}
+                disabled={isSavingVoucher}
+                className="btn btn-ghost rounded-xl py-2 px-5 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {event.status === 'draft' && (
         <div className="bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 text-amber-900 dark:text-amber-200 p-4 rounded-xl text-sm flex items-start gap-3 animate-fadeIn">

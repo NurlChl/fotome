@@ -3,7 +3,8 @@ import connectDB from '@/lib/db/mongodb';
 import { User, FaceSearch } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 import { updateProfileSchema } from '@/lib/validation';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { logActivity } from '@/lib/axiom';
 
 /**
  * GET /api/users/profile - Get current user profile
@@ -63,10 +64,45 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const { name, bio, portfolio, faceDescriptor } = result.data;
+    const { name, bio, portfolio, faceDescriptor, faceImageUrl } = result.data;
 
     if (name) user.name = name;
-    if (faceDescriptor) user.faceDescriptor = faceDescriptor;
+
+    let uploadedFaceImageUrl = '';
+    if (faceImageUrl && faceImageUrl.startsWith('data:image/')) {
+      try {
+        const { uploadImage } = await import('@/lib/cloudinary');
+        const base64Data = faceImageUrl.split(';base64,').pop();
+        if (base64Data) {
+          const buffer = Buffer.from(base64Data, 'base64');
+          const uploadResult = await uploadImage(buffer, {
+            folder: 'fotome/users/face-ids',
+            tags: ['user-face-id', user._id.toString()],
+          });
+          uploadedFaceImageUrl = uploadResult.secure_url;
+        }
+      } catch (uploadErr) {
+        console.error('Error uploading face image to Cloudinary:', uploadErr);
+      }
+    }
+
+    if (faceImageUrl !== undefined) {
+      if (uploadedFaceImageUrl) {
+        user.faceImageUrl = uploadedFaceImageUrl;
+      } else if (faceImageUrl === null || faceImageUrl === '') {
+        user.faceImageUrl = undefined;
+      }
+    }
+
+    if (faceDescriptor) {
+      user.faceDescriptor = faceDescriptor;
+      await logActivity(
+        user._id.toString(),
+        'REGISTER_FACE_ID',
+        'Registered/updated Face ID biometric profile',
+        getClientIp(req)
+      );
+    }
 
     if (user.role === 'photographer') {
       if (!user.photographerProfile) {
@@ -123,12 +159,20 @@ export async function DELETE(req: NextRequest) {
       userId: session.user.id,
     });
 
-    // Also delete user's registered face descriptor
+    // Also delete user's registered face descriptor and face image
     const user = await User.findById(session.user.id);
     if (user) {
       user.faceDescriptor = undefined;
+      user.faceImageUrl = undefined;
       await user.save();
     }
+
+    await logActivity(
+      session.user.id,
+      'DELETE_BIOMETRICS',
+      'Deleted Face ID biometric profile and search logs',
+      getClientIp(req)
+    );
 
     return NextResponse.json({
       message: 'Biometric data and search logs deleted successfully',

@@ -171,6 +171,7 @@ export default function EventsPage() {
                         src={event.coverImage} 
                         alt={event.title} 
                         className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-neutral-950">

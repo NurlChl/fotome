@@ -25,6 +25,7 @@ interface AdminData {
     manageUsers: boolean;
     manageEvents: boolean;
     managePayouts: boolean;
+    manageLogs: boolean;
   };
   createdAt: string;
 }
@@ -44,6 +45,7 @@ export default function AdminsPage() {
   const [permUsers, setPermUsers] = useState(false);
   const [permEvents, setPermEvents] = useState(false);
   const [permPayouts, setPermPayouts] = useState(false);
+  const [permLogs, setPermLogs] = useState(false);
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [adminSuccess, setAdminSuccess] = useState('');
   const [adminError, setAdminError] = useState('');
@@ -56,6 +58,7 @@ export default function AdminsPage() {
   const [editPermUsers, setEditPermUsers] = useState(false);
   const [editPermEvents, setEditPermEvents] = useState(false);
   const [editPermPayouts, setEditPermPayouts] = useState(false);
+  const [editPermLogs, setEditPermLogs] = useState(false);
   const [isUpdatingAdmin, setIsUpdatingAdmin] = useState(false);
 
   const isSuperadmin = session?.user?.role === 'superadmin';
@@ -108,6 +111,7 @@ export default function AdminsPage() {
             manageUsers: permUsers,
             manageEvents: permEvents,
             managePayouts: permPayouts,
+            manageLogs: permLogs,
           },
         }),
       });
@@ -122,6 +126,7 @@ export default function AdminsPage() {
         setPermUsers(false);
         setPermEvents(false);
         setPermPayouts(false);
+        setPermLogs(false);
         fetchAdminsList();
       } else {
         throw new Error(data.error || 'Failed to create admin');
@@ -140,6 +145,7 @@ export default function AdminsPage() {
     setEditPermUsers(admin.adminPermissions?.manageUsers || false);
     setEditPermEvents(admin.adminPermissions?.manageEvents || false);
     setEditPermPayouts(admin.adminPermissions?.managePayouts || false);
+    setEditPermLogs(admin.adminPermissions?.manageLogs || false);
     setIsEditModalOpen(true);
   };
 
@@ -163,6 +169,7 @@ export default function AdminsPage() {
             manageUsers: editPermUsers,
             manageEvents: editPermEvents,
             managePayouts: editPermPayouts,
+            manageLogs: editPermLogs,
           },
         }),
       });
@@ -314,6 +321,12 @@ export default function AdminsPage() {
                             </span>
                             <span className="text-neutral-400">Payouts</span>
                           </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className={adm.adminPermissions?.manageLogs ? 'text-emerald-500' : 'text-rose-500'}>
+                              {adm.adminPermissions?.manageLogs ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                            </span>
+                            <span className="text-neutral-400">Activity Logs</span>
+                          </div>
                         </div>
                       )}
                     </td>
@@ -421,6 +434,15 @@ export default function AdminsPage() {
                   />
                   <span className="text-sm text-neutral-300">Payouts</span>
                 </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={permLogs} 
+                    onChange={(e) => setPermLogs(e.target.checked)} 
+                    className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-neutral-300">Activity Logs</span>
+                </label>
               </div>
             </div>
 
@@ -506,6 +528,15 @@ export default function AdminsPage() {
                       className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
                     />
                     <span className="text-sm text-neutral-300">Payouts</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={editPermLogs} 
+                      onChange={(e) => setEditPermLogs(e.target.checked)} 
+                      className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-neutral-300">Activity Logs</span>
                   </label>
                 </div>
               </div>

@@ -69,10 +69,6 @@ export const createEventSchema = z.object({
     .number()
     .min(0, 'Price cannot be negative')
     .max(10000000, 'Price too high'),
-  pricePackage: z
-    .number()
-    .min(0, 'Package price cannot be negative')
-    .optional(),
   tags: z.array(z.string()).max(10).optional(),
 });
 
@@ -107,6 +103,7 @@ export const createOrderSchema = z.object({
     .min(1, 'At least one photo is required')
     .max(50, 'Maximum 50 photos per order'),
   eventId: z.string().min(1, 'Event ID is required'),
+  voucherId: z.string().optional(),
 });
 
 // ============================================
@@ -137,6 +134,43 @@ export const updateProfileSchema = z.object({
     .array(z.number())
     .length(128, 'Face descriptor must be a 128-dimensional vector')
     .optional(),
+  faceImageUrl: z.string().optional(),
+});
+
+export const voucherSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Nama voucher wajib diisi')
+    .max(100, 'Nama voucher maksimal 100 karakter'),
+  description: z.string().max(500).optional(),
+  usageLimitPerUser: z
+    .number()
+    .int('Batas penggunaan harus berupa bilangan bulat')
+    .min(1, 'Batas penggunaan minimal 1')
+    .optional()
+    .nullable(),
+  allowedUserIds: z.array(z.string()).optional(),
+  minPhotos: z
+    .number()
+    .int('Minimal foto harus berupa bilangan bulat')
+    .min(1, 'Minimal foto minimal 1'),
+  discountType: z.enum(['percentage', 'fixed'], {
+    required_error: 'Tipe diskon wajib diisi',
+  }),
+  discountValue: z
+    .number()
+    .min(1, 'Nilai diskon minimal 1'),
+  status: z.enum(['draft', 'published'], {
+    required_error: 'Status voucher wajib diisi',
+  }),
+}).refine((data) => {
+  if (data.discountType === 'percentage' && data.discountValue > 100) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Persentase diskon maksimal 100',
+  path: ['discountValue'],
 });
 
 // ============================================

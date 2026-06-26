@@ -16,6 +16,7 @@ export interface IUser extends Document {
     manageUsers: boolean;
     manageEvents: boolean;
     managePayouts: boolean;
+    manageLogs: boolean;
   };
   isVerified: boolean;
   isBanned: boolean;
@@ -32,6 +33,7 @@ export interface IUser extends Document {
   resetPasswordToken?: string;
   resetPasswordExpiry?: Date;
   faceDescriptor?: number[];
+  faceImageUrl?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -75,6 +77,7 @@ const userSchema = new Schema<IUser>(
       manageUsers: { type: Boolean, default: false },
       manageEvents: { type: Boolean, default: false },
       managePayouts: { type: Boolean, default: false },
+      manageLogs: { type: Boolean, default: false },
     },
     isVerified: {
       type: Boolean,

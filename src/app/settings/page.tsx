@@ -166,11 +166,17 @@ export default function SettingsPage() {
         throw new Error('Wajah tidak terdeteksi. Pastikan pencahayaan cukup dan wajah terlihat jelas.');
       }
 
+      // Convert canvas to base64 data URL
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
       // Save descriptor to user profile
       const res = await fetch('/api/users/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ faceDescriptor: descriptor }),
+        body: JSON.stringify({ 
+          faceDescriptor: descriptor,
+          faceImageUrl: dataUrl
+        }),
       });
 
       const data = await res.json();

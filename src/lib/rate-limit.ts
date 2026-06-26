@@ -5,6 +5,53 @@ interface RateLimitEntry {
   resetTime: number;
 }
 
+// Cache for public IP to avoid repeated API calls
+let cachedPublicIp: string | null = null;
+
+/**
+ * Fetch public IP from external service
+ */
+async function getPublicIp(): Promise<string | null> {
+  if (cachedPublicIp) return cachedPublicIp;
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1000); // 1-second timeout
+    
+    const response = await fetch('https://api.ipify.org?format=json', { 
+      signal: controller.signal 
+    });
+    
+    clearTimeout(timeoutId);
+    
+    const data = await response.json();
+    if (data && data.ip) {
+      cachedPublicIp = data.ip;
+      return cachedPublicIp;
+    }
+  } catch (err) {
+    console.warn('Failed to resolve public IP:', err);
+  }
+  
+  return null;
+}
+
+/**
+ * Check if IP is a loopback/localhost address
+ */
+function isLoopbackIp(ip: string): boolean {
+  if (!ip) return true;
+  
+  const cleaned = ip.trim().toLowerCase();
+  return (
+    cleaned === '::1' ||
+    cleaned === '127.0.0.1' ||
+    cleaned === '::ffff:127.0.0.1' ||
+    cleaned === 'localhost' ||
+    cleaned === 'unknown'
+  );
+}
+
 // In-memory store (suitable for single-instance deployment)
 // For production multi-instance, use Redis
 const rateLimitStore = new Map<string, RateLimitEntry>();
@@ -52,14 +99,30 @@ const RATE_LIMIT_CONFIGS: Record<string, RateLimitConfig> = {
  * Get client IP from request
  */
 function getClientIp(req: NextRequest): string {
+  // Check standard proxy headers
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) {
     return forwarded.split(',')[0].trim();
   }
+  
   const realIp = req.headers.get('x-real-ip');
   if (realIp) {
     return realIp;
   }
+  
+  // Check Cloudflare header
+  const cfConnectingIp = req.headers.get('cf-connecting-ip');
+  if (cfConnectingIp) {
+    return cfConnectingIp;
+  }
+  
+  // Try NextRequest.ip property (available in some environments)
+  const reqIp = (req as any).ip;
+  if (reqIp) {
+    return reqIp;
+  }
+  
+  // Default to localhost
   return '127.0.0.1';
 }
 
@@ -118,3 +181,21 @@ export function checkRateLimit(
  * Get client IP helper (exported for use in API routes)
  */
 export { getClientIp };
+
+/**
+ * Get client IP with public IP resolution for loopback addresses
+ * Use this when you need the actual public IP (e.g., for logging, claims)
+ */
+export async function getClientIpResolved(req: NextRequest): Promise<string> {
+  let ip = getClientIp(req);
+  
+  // If we detected a loopback IP, try to get the public IP
+  if (isLoopbackIp(ip)) {
+    const publicIp = await getPublicIp();
+    if (publicIp) {
+      return publicIp;
+    }
+  }
+  
+  return ip;
+}

@@ -48,6 +48,11 @@
   --color-success-bg: var(--success-bg);
   --color-success-border: var(--success-border);
   --color-success-text: var(--success-text);
+
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-warning-text: var(--warning-text);
+  --color-warning-title: var(--warning-title);
 }
 
 :root {
@@ -73,6 +78,11 @@
   --success-bg: rgba(6, 78, 59, 0.3);
   --success-border: rgba(16, 185, 129, 0.2);
   --success-text: #34d399;
+
+  --warning-bg: rgba(136, 19, 55, 0.2);
+  --warning-border: rgba(244, 63, 94, 0.15);
+  --warning-text: #fecdd3;
+  --warning-title: #fb7185;
 }
 
 .light {
@@ -98,6 +108,11 @@
   --success-bg: #f0fdf4;
   --success-border: #bbf7d0;
   --success-text: #15803d;
+
+  --warning-bg: #fff1f2;
+  --warning-border: #fecdd3;
+  --warning-text: #9f1239;
+  --warning-title: #be123c;
 }
 
 @layer base {

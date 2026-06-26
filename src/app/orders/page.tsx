@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, CreditCard, Download, ShoppingBag } from 'lucide-react';
+import { Loader2, Download, ShoppingBag, ExternalLink, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
 interface OrderItemData {
   _id: string;
@@ -23,18 +23,23 @@ interface OrderData {
   _id: string;
   orderNumber: string;
   totalAmount: number;
-  status: 'pending' | 'paid' | 'failed' | 'refunded';
+  status: 'pending' | 'paid' | 'failed' | 'refunded' | 'cancelled';
+  midtransSnapToken?: string;
+  midtransRedirectUrl?: string;
   createdAt: string;
+  paidAt?: string;
   items: OrderItemData[];
 }
 
-export default function OrdersPage() {
+function OrdersContent() {
   const { status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'pending' | 'error'; message: string } | null>(null);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -61,31 +66,75 @@ export default function OrdersPage() {
     }
   }, [status, router, fetchOrders]);
 
+  useEffect(() => {
+    const success = searchParams.get('success') === 'true';
+    const pending = searchParams.get('pending') === 'true';
+    const error = searchParams.get('error') === 'true';
 
-
-  const handlePayPending = async (orderId: string) => {
-    setPayingId(orderId);
-    try {
-      const res = await fetch('/api/orders/mock-pay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        // Success: update local state or redirect
-        setOrders((prev) =>
-          prev.map((o) => (o._id === orderId ? { ...o, status: 'paid' } : o))
-        );
-        router.push('/my-photos?success=true');
-      } else {
-        throw new Error(data.error || 'Payment failed');
+    const timer = setTimeout(() => {
+      if (success) {
+        setNotification({ type: 'success', message: 'Payment successful! Your photos are now available in My Gallery.' });
+      } else if (pending) {
+        setNotification({ type: 'pending', message: 'Payment is pending. We will update your order once the payment is confirmed.' });
+      } else if (error) {
+        setNotification({ type: 'error', message: 'Payment failed or was cancelled. Please try again.' });
       }
+
+      setTimeout(() => setNotification(null), 8000);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [searchParams]);
+
+
+
+  const handlePayPending = async (order: OrderData) => {
+    setPayingId(order._id);
+    try {
+      // Prefer redirect URL, fall back to Snap token popup
+      if (order.midtransRedirectUrl) {
+        window.location.assign(order.midtransRedirectUrl);
+        return;
+      }
+
+      if (order.midtransSnapToken) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const win = window as unknown as Record<string, any>;
+        if (!win.snap) {
+          const script = document.createElement('script');
+          script.src = `https://app.${
+            process.env.MIDTRANS_IS_PRODUCTION === 'true' ? '' : 'sandbox.'
+          }midtrans.com/snap/snap.js`;
+          script.setAttribute('data-client-key', process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || '');
+          document.head.appendChild(script);
+
+          await new Promise((resolve) => {
+            script.onload = resolve;
+          });
+        }
+
+        win.snap.pay(order.midtransSnapToken, {
+          onSuccess: function () {
+            router.push('/orders?success=true');
+          },
+          onPending: function () {
+            router.push('/orders?pending=true');
+          },
+          onError: function () {
+            router.push('/orders?error=true');
+          },
+          onClose: function () {
+            setPayingId(null);
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+        return;
+      }
+
+      throw new Error('Payment link is not available for this order. Please contact support.');
     } catch (error) {
       console.error('Payment error:', error);
-      alert(error instanceof Error ? error.message : 'Simulation failed. Please try again.');
-    } finally {
+      alert(error instanceof Error ? error.message : 'Failed to open payment page. Please try again.');
       setPayingId(null);
     }
   };
@@ -129,6 +178,32 @@ export default function OrdersPage() {
           </div>
         </div>
 
+        {notification && (
+          <div className={`max-w-4xl mx-auto mb-8 p-5 rounded-2xl flex items-start gap-4 shadow-lg ${
+            notification.type === 'success'
+              ? 'bg-emerald-950/30 border border-emerald-500/20 text-emerald-400'
+              : notification.type === 'pending'
+              ? 'bg-amber-950/30 border border-amber-500/20 text-amber-400'
+              : 'bg-rose-950/30 border border-rose-500/20 text-rose-400'
+          }`}>
+            {notification.type === 'success' ? (
+              <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" />
+            ) : notification.type === 'pending' ? (
+              <Clock className="w-6 h-6 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <h3 className={`font-bold mb-1 ${
+                notification.type === 'success' ? 'text-emerald-50' : notification.type === 'pending' ? 'text-amber-50' : 'text-rose-50'
+              }`}>
+                {notification.type === 'success' ? 'Payment Successful' : notification.type === 'pending' ? 'Payment Pending' : 'Payment Failed'}
+              </h3>
+              <p className="text-sm font-light">{notification.message}</p>
+            </div>
+          </div>
+        )}
+
         {orders.length > 0 ? (
           <div className="max-w-4xl mx-auto space-y-6">
             {orders.map((order) => (
@@ -155,7 +230,7 @@ export default function OrdersPage() {
                   {order.items.map((item) => (
                     <div key={item._id} className="aspect-square rounded-xl overflow-hidden bg-neutral-950 border border-neutral-800 relative group" title={item.eventId?.title}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={item.photoId?.thumbnailUrl} alt="Order item thumb" className="w-full h-full object-cover transition duration-300 group-hover:scale-110" />
+                      <img src={item.photoId?.thumbnailUrl} alt="Order item thumb" className="w-full h-full object-cover transition duration-300 group-hover:scale-110" loading="lazy" />
                     </div>
                   ))}
                 </div>
@@ -169,7 +244,7 @@ export default function OrdersPage() {
                   {order.status === 'pending' && (
                     <button
                       className="btn btn-primary rounded-xl px-6 py-2.5 flex items-center justify-center gap-2 text-sm shadow-lg shadow-primary-500/20"
-                      onClick={() => handlePayPending(order._id)}
+                      onClick={() => handlePayPending(order)}
                       disabled={payingId === order._id}
                       id={`btn-pay-${order._id}`}
                     >
@@ -179,7 +254,7 @@ export default function OrdersPage() {
                         </>
                       ) : (
                         <>
-                          <CreditCard className="w-4 h-4" /> Pay Now (Sandbox)
+                          <ExternalLink className="w-4 h-4" /> Pay Now
                         </>
                       )}
                     </button>
@@ -210,5 +285,18 @@ export default function OrdersPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={
+      <div className="pt-28 min-h-screen pb-24 bg-neutral-950 flex flex-col items-center justify-center gap-4">
+        <Loader2 className="w-10 h-10 text-primary-500 animate-spin" />
+        <p className="text-neutral-400 text-sm">Loading your orders...</p>
+      </div>
+    }>
+      <OrdersContent />
+    </Suspense>
   );
 }

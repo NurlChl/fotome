@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Camera, Download, Loader2, CheckCircle2 } from 'lucide-react';
+import { Camera, Download, Loader2, CheckCircle2, X, ChevronDown, Search as SearchIcon } from 'lucide-react';
 
 interface PurchasedPhoto {
   _id: string;
   thumbnailUrl: string;
   watermarkedUrl: string;
+  cloudinaryUrl: string;
   eventTitle: string;
   eventSlug: string;
   purchasedAt: string;
@@ -21,6 +22,7 @@ interface OrderItemResponse {
     _id: string;
     thumbnailUrl: string;
     watermarkedUrl: string;
+    cloudinaryUrl: string;
   };
   eventId: {
     title: string;
@@ -36,6 +38,11 @@ interface OrderResponse {
   items: OrderItemResponse[];
 }
 
+interface EventOption {
+  title: string;
+  slug: string;
+}
+
 function MyPhotos() {
   const { status } = useSession();
   const router = useRouter();
@@ -45,6 +52,11 @@ function MyPhotos() {
   const [photos, setPhotos] = useState<PurchasedPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [selectedEventSlug, setSelectedEventSlug] = useState<string>('all');
+  const [eventSearch, setEventSearch] = useState('');
+  const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState<PurchasedPhoto | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -67,6 +79,7 @@ function MyPhotos() {
                     _id: item.photoId._id,
                     thumbnailUrl: item.photoId.thumbnailUrl,
                     watermarkedUrl: item.photoId.watermarkedUrl,
+                    cloudinaryUrl: item.photoId.cloudinaryUrl || item.photoId.thumbnailUrl,
                     eventTitle: item.eventId.title,
                     eventSlug: item.eventId.slug,
                     purchasedAt: order.paidAt || order.createdAt,
@@ -125,6 +138,45 @@ function MyPhotos() {
     });
   };
 
+  // Build unique event options from purchased photos
+  const eventOptions = useMemo<EventOption[]>(() => {
+    const map = new Map<string, string>();
+    photos.forEach((p) => {
+      if (!map.has(p.eventSlug)) {
+        map.set(p.eventSlug, p.eventTitle);
+      }
+    });
+    return [{ title: 'Semua Event', slug: 'all' }, ...Array.from(map.entries()).map(([slug, title]) => ({ slug, title }))];
+  }, [photos]);
+
+  const filteredEventOptions = useMemo(() => {
+    const term = eventSearch.trim().toLowerCase();
+    if (!term) return eventOptions;
+    return eventOptions.filter((e) => e.title.toLowerCase().includes(term));
+  }, [eventOptions, eventSearch]);
+
+  const filteredPhotos = useMemo(() => {
+    if (selectedEventSlug === 'all') return photos;
+    return photos.filter((p) => p.eventSlug === selectedEventSlug);
+  }, [photos, selectedEventSlug]);
+
+  const selectedEventTitle = useMemo(() => {
+    return eventOptions.find((e) => e.slug === selectedEventSlug)?.title || 'Semua Event';
+  }, [eventOptions, selectedEventSlug]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsEventDropdownOpen(false);
+      }
+    }
+    if (isEventDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isEventDropdownOpen]);
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="pt-28 min-h-screen pb-24 bg-neutral-950 flex flex-col items-center justify-center gap-4">
@@ -149,7 +201,7 @@ function MyPhotos() {
 
         <div className="relative border-b border-neutral-900 py-16 mb-12 overflow-hidden -mt-28 pt-36">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl aspect-video bg-primary-500/10 rounded-full blur-[120px] pointer-events-none z-0" />
-          
+
           <div className="relative z-10 text-center">
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-neutral-50 mb-4">My Gallery</h1>
             <p className="text-neutral-400 text-sm sm:text-base font-light">
@@ -158,13 +210,78 @@ function MyPhotos() {
           </div>
         </div>
 
-        {photos.length > 0 ? (
+        {photos.length > 0 && (
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-sm text-neutral-400">
+              Showing {filteredPhotos.length} of {photos.length} photo{photos.length !== 1 ? 's' : ''}
+            </div>
+
+            {/* Event filter dropdown with search */}
+            <div className="relative w-full sm:w-72" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsEventDropdownOpen((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-neutral-900/50 border border-neutral-800 rounded-xl text-sm text-neutral-100 hover:border-neutral-700 transition"
+              >
+                <span className="truncate">{selectedEventTitle}</span>
+                <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isEventDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isEventDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-neutral-900 border border-neutral-800 rounded-xl shadow-xl z-30 overflow-hidden">
+                  <div className="p-2 border-b border-neutral-800">
+                    <div className="relative">
+                      <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                      <input
+                        type="text"
+                        value={eventSearch}
+                        onChange={(e) => setEventSearch(e.target.value)}
+                        placeholder="Cari event..."
+                        className="w-full pl-9 pr-3 py-2 bg-neutral-950 rounded-lg text-sm text-neutral-100 placeholder:text-neutral-600"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredEventOptions.length > 0 ? (
+                      filteredEventOptions.map((evt) => (
+                        <button
+                          key={evt.slug}
+                          type="button"
+                          onClick={() => {
+                            setSelectedEventSlug(evt.slug);
+                            setIsEventDropdownOpen(false);
+                            setEventSearch('');
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition hover:bg-neutral-800 ${
+                            selectedEventSlug === evt.slug ? 'text-primary-400 bg-primary-500/5' : 'text-neutral-200'
+                          }`}
+                        >
+                          {evt.title}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-xs text-neutral-500">Tidak ada event ditemukan</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {filteredPhotos.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {photos.map((photo) => (
+            {filteredPhotos.map((photo) => (
               <div key={photo._id} className="group bg-neutral-900/30 border border-neutral-900 rounded-2xl overflow-hidden hover:border-neutral-800 transition duration-300 flex flex-col">
-                <div className="relative w-full aspect-video overflow-hidden bg-neutral-950">
+                <div className="relative w-full aspect-video overflow-hidden bg-neutral-950 cursor-pointer" onClick={() => setPreviewPhoto(photo)}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.thumbnailUrl} alt={photo.eventTitle} className="w-full h-full object-cover transition duration-500 group-hover:scale-105" />
+                  <img src={photo.thumbnailUrl} alt={photo.eventTitle} className="w-full h-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" />
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                    <span className="text-[10px] font-medium px-2.5 py-1 bg-black/65 text-white rounded-full backdrop-blur-sm border border-white/10">
+                      Preview
+                    </span>
+                  </div>
                 </div>
                 <div className="p-5 flex flex-col grow">
                   <div className="text-lg font-bold text-neutral-50 mb-3 line-clamp-1">{photo.eventTitle}</div>
@@ -197,9 +314,11 @@ function MyPhotos() {
             <div className="mb-4 p-4 rounded-full bg-neutral-900/50 border border-neutral-800 inline-flex text-neutral-500">
               <Camera className="w-8 h-8" />
             </div>
-            <h2 className="text-lg font-bold text-neutral-50 mb-2">No photos found</h2>
+            <h2 className="text-lg font-bold text-neutral-50 mb-2">{photos.length > 0 ? 'No photos in selected event' : 'No photos found'}</h2>
             <p className="text-xs text-neutral-500 font-light mb-6 max-w-sm mx-auto">
-              You haven&apos;t purchased any photos yet. Visit events to search for your photos!
+              {photos.length > 0
+                ? 'Try selecting a different event from the filter above.'
+                : "You haven't purchased any photos yet. Visit events to search for your photos!"}
             </p>
             <Link href="/events" className="btn btn-primary rounded-xl px-6 py-2">
               Browse Events
@@ -207,6 +326,54 @@ function MyPhotos() {
           </div>
         )}
       </div>
+
+      {/* Preview Modal - unwatermarked because photo is already purchased */}
+      {previewPhoto && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col overflow-hidden animate-fadeIn" onClick={() => setPreviewPhoto(null)}>
+          <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 bg-black/80 backdrop-blur-md text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="text-sm font-medium">{previewPhoto.eventTitle}</div>
+            <button
+              type="button"
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition"
+              onClick={() => setPreviewPhoto(null)}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 w-full flex items-center justify-center p-4 sm:p-8" onClick={() => setPreviewPhoto(null)}>
+            <div className="relative max-w-full max-h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewPhoto.cloudinaryUrl}
+                alt={previewPhoto.eventTitle}
+                className="max-w-full max-h-[calc(100vh-180px)] object-contain rounded-xl shadow-2xl border border-white/10"
+              />
+            </div>
+          </div>
+          <div className="p-5 border-t border-white/10 bg-black/80 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-1 text-left">
+              <h4 className="text-sm font-bold text-white">{previewPhoto.eventTitle}</h4>
+              <p className="text-xs text-gray-400 font-light">Purchased: {formatDate(previewPhoto.purchasedAt)}</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary rounded-xl px-6 py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+              onClick={() => handleDownload(previewPhoto._id, previewPhoto.orderNumber)}
+              disabled={downloadingId === previewPhoto._id}
+            >
+              {downloadingId === previewPhoto._id ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Downloading...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" /> Download High-Res
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

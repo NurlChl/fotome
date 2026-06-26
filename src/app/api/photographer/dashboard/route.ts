@@ -50,43 +50,47 @@ export async function GET() {
     const totalRevenue = salesStats[0]?.totalRevenue || 0;
     const photosSold = salesStats[0]?.photosSold || 0;
 
-    // 6. Get recent events with photo counts and sales count
     const events = await Event.find({ photographerId })
       .sort({ createdAt: -1 })
       .limit(10)
       .lean();
 
-    const eventsWithSales = await Promise.all(
-      events.map(async (event) => {
-        const soldCount = await OrderItem.countDocuments({
-          eventId: event._id,
+    const eventIds = events.map((e) => e._id);
+
+    const salesByEvent = await OrderItem.aggregate([
+      {
+        $match: {
+          eventId: { $in: eventIds },
           orderId: { $in: paidOrders },
-        });
+        },
+      },
+      {
+        $group: {
+          _id: '$eventId',
+          soldCount: { $sum: 1 },
+          revenue: { $sum: '$photographerRevenue' },
+        },
+      },
+    ]);
 
-        // Calculate event revenue
-        const eventSales = await OrderItem.aggregate([
-          {
-            $match: {
-              eventId: event._id,
-              orderId: { $in: paidOrders },
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              revenue: { $sum: '$photographerRevenue' },
-            },
-          },
-        ]);
-        const eventRevenue = eventSales[0]?.revenue || 0;
-
-        return {
-          ...event,
-          soldCount,
-          revenue: eventRevenue,
+    const salesMap = salesByEvent.reduce((acc, item) => {
+      if (item._id) {
+        acc[item._id.toString()] = {
+          soldCount: item.soldCount,
+          revenue: item.revenue,
         };
-      })
-    );
+      }
+      return acc;
+    }, {} as Record<string, { soldCount: number; revenue: number }>);
+
+    const eventsWithSales = events.map((event) => {
+      const stats = salesMap[event._id.toString()] || { soldCount: 0, revenue: 0 };
+      return {
+        ...event,
+        soldCount: stats.soldCount,
+        revenue: stats.revenue,
+      };
+    });
 
     return NextResponse.json({
       stats: {

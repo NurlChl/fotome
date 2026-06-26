@@ -19,7 +19,6 @@ export interface IEvent extends Document {
   status: 'draft' | 'published' | 'archived';
   photoCount: number;
   pricePerPhoto: number;
-  pricePackage?: number;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
@@ -87,11 +86,6 @@ const eventSchema = new Schema<IEvent>(
       type: Number,
       required: true,
       min: [0, 'Price cannot be negative'],
-    },
-    pricePackage: {
-      type: Number,
-      default: null,
-      min: [0, 'Package price cannot be negative'],
     },
     tags: {
       type: [String],

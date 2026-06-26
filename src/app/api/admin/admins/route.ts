@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
       manageUsers: !!permissions?.manageUsers,
       manageEvents: !!permissions?.manageEvents,
       managePayouts: !!permissions?.managePayouts,
+      manageLogs: !!permissions?.manageLogs,
     };
 
     // Create the admin user
@@ -126,6 +127,7 @@ export async function PUT(req: NextRequest) {
         manageUsers: !!permissions.manageUsers,
         manageEvents: !!permissions.manageEvents,
         managePayouts: !!permissions.managePayouts,
+        manageLogs: !!permissions.manageLogs,
       };
     }
 
