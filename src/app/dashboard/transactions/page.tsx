@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
@@ -61,25 +61,44 @@ export default function TransactionsPage() {
   const [downloads, setDownloads] = useState<DownloadEntry[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'purchases' | 'downloads'>('purchases');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [purchasesPage, setPurchasesPage] = useState(1);
+  const [purchasesHasMore, setPurchasesHasMore] = useState(false);
   const [previewOrder, setPreviewOrder] = useState<PurchaseEntry | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+  const touchStartX = useRef<number>(0);
+  const touchEndX = useRef<number>(0);
 
   const canManagePayouts = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.managePayouts;
 
-  async function fetchTransactions() {
+  async function fetchTransactions(nextPage = 1) {
     try {
-      setIsLoading(true);
-      const res = await fetch('/api/admin/transactions');
+      if (nextPage === 1) {
+        setIsLoading(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+      const res = await fetch(`/api/admin/transactions?page=${nextPage}&limit=50`);
       const data = await res.json();
       if (res.ok) {
-        setPurchases(data.purchases || []);
-        setDownloads(data.downloads || []);
+        const nextPurchases = data.purchases || [];
+        if (nextPage === 1) {
+          setPurchases(nextPurchases);
+        } else {
+          setPurchases((prev) => [...prev, ...nextPurchases]);
+        }
+        if (nextPage === 1) {
+          setDownloads(data.downloads || []);
+        }
+        setPurchasesPage(nextPage);
+        setPurchasesHasMore(!!data.pagination?.hasMore);
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   }
 
@@ -96,7 +115,7 @@ export default function TransactionsPage() {
       }
 
       if (canManagePayouts) {
-        fetchTransactions();
+        fetchTransactions(1);
       }
     }, 0);
 
@@ -142,6 +161,62 @@ export default function TransactionsPage() {
     setPreviewIndex((prev) => (prev < previewOrder.photos.length - 1 ? prev + 1 : 0));
   };
 
+  // Keyboard navigation for order preview modal
+  useEffect(() => {
+    if (!previewOrder) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        goToPrev();
+      } else if (e.key === 'ArrowRight') {
+        goToNext();
+      } else if (e.key === 'Escape') {
+        closeOrderPreview();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewOrder]);
+
+  // Touch/swipe navigation for order preview modal
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.changedTouches[0].screenX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    touchEndX.current = e.changedTouches[0].screenX;
+    handleSwipe();
+  };
+
+  const handleSwipe = () => {
+    if (!previewOrder) return;
+    const swipeThreshold = 50;
+    const diff = touchStartX.current - touchEndX.current;
+
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0) {
+        // Swipe left - go to next
+        goToNext();
+      } else {
+        // Swipe right - go to previous
+        goToPrev();
+      }
+    }
+  };
+
+  // Hide header when preview is active
+  useEffect(() => {
+    if (previewOrder || previewPhotoUrl) {
+      document.body.classList.add('preview-modal-open');
+    } else {
+      document.body.classList.remove('preview-modal-open');
+    }
+    return () => {
+      document.body.classList.remove('preview-modal-open');
+    };
+  }, [previewOrder, previewPhotoUrl]);
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="space-y-6 animate-fadeIn">
@@ -166,7 +241,7 @@ export default function TransactionsPage() {
           </p>
         </div>
         <button
-          onClick={fetchTransactions}
+          onClick={() => fetchTransactions(1)}
           className="btn btn-secondary btn-sm rounded-lg text-xs"
         >
           Refresh Data
@@ -207,82 +282,96 @@ export default function TransactionsPage() {
       <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-6">
         {activeSubTab === 'purchases' ? (
           purchases.length > 0 ? (
-            <div className="overflow-x-auto border border-neutral-900 rounded-xl">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-neutral-950/50 border-b border-neutral-900 text-neutral-400 text-xs uppercase font-medium">
-                    <th className="px-6 py-4">Preview</th>
-                    <th className="px-6 py-4">Order Number</th>
-                    <th className="px-6 py-4">Account</th>
-                    <th className="px-6 py-4">Event</th>
-                    <th className="px-6 py-4">Price</th>
-                    <th className="px-6 py-4">Paid At</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-900">
-                  {purchases.map((purchase) => (
-                    <tr key={purchase._id} className="hover:bg-neutral-900/10 text-neutral-300">
-                      <td className="px-6 py-4">
-                        {purchase.photos.length > 0 ? (
-                          <div
-                            className="relative w-14 h-14 rounded-lg overflow-hidden border border-neutral-800 bg-neutral-950 group cursor-pointer"
-                            onClick={() => openOrderPreview(purchase)}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={purchase.photos[0].thumbnailUrl || purchase.photos[0].watermarkedUrl}
-                              alt="Photo Thumbnail"
-                              className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition duration-200">
-                              <Eye className="w-4 h-4 text-white" />
-                            </div>
-                            {purchase.photoCount > 1 && (
-                              <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/10">
-                                +{purchase.photoCount - 1}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="w-14 h-14 rounded-lg bg-neutral-950 flex items-center justify-center border border-neutral-900">
-                            <ImageIcon className="w-5 h-5 text-neutral-600" />
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs font-bold text-neutral-100">
-                        {purchase.orderNumber}
-                      </td>
-                      <td className="px-6 py-4">
-                        {purchase.userId ? (
-                          <>
-                            <div className="font-semibold text-neutral-50">{purchase.userId.name}</div>
-                            <div className="text-xs text-neutral-500">{purchase.userId.email}</div>
-                          </>
-                        ) : (
-                          <span className="text-neutral-500 text-xs italic">Unknown User</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        {purchase.eventId ? (
-                          <>
-                            <div className="font-medium text-neutral-200">{purchase.eventId.title}</div>
-                            <div className="text-xs text-neutral-500 font-mono">/{purchase.eventId.slug}</div>
-                          </>
-                        ) : (
-                          <span className="text-neutral-500 text-xs">Unknown Event</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-emerald-500 font-display">
-                        {formatPrice(purchase.totalAmount)}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-neutral-400">
-                        {formatDate(purchase.paidAt)}
-                      </td>
+            <>
+              <div className="overflow-x-auto border border-neutral-900 rounded-xl">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-neutral-950/50 border-b border-neutral-900 text-neutral-400 text-xs uppercase font-medium">
+                      <th className="px-6 py-4">Preview</th>
+                      <th className="px-6 py-4">Order Number</th>
+                      <th className="px-6 py-4">Account</th>
+                      <th className="px-6 py-4">Event</th>
+                      <th className="px-6 py-4">Price</th>
+                      <th className="px-6 py-4">Paid At</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-900">
+                    {purchases.map((purchase) => (
+                      <tr key={purchase._id} className="hover:bg-neutral-900/10 text-neutral-300">
+                        <td className="px-6 py-4">
+                          {purchase.photos.length > 0 ? (
+                            <div
+                              className="relative w-14 h-14 rounded-lg overflow-hidden border border-neutral-800 bg-neutral-950 group cursor-pointer"
+                              onClick={() => openOrderPreview(purchase)}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={purchase.photos[0].thumbnailUrl || purchase.photos[0].watermarkedUrl}
+                                alt="Photo Thumbnail"
+                                className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition duration-200">
+                                <Eye className="w-4 h-4 text-white" />
+                              </div>
+                              {purchase.photoCount > 1 && (
+                                <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-white/10">
+                                  +{purchase.photoCount - 1}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="w-14 h-14 rounded-lg bg-neutral-950 flex items-center justify-center border border-neutral-900">
+                              <ImageIcon className="w-5 h-5 text-neutral-600" />
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs font-bold text-neutral-100">
+                          {purchase.orderNumber}
+                        </td>
+                        <td className="px-6 py-4">
+                          {purchase.userId ? (
+                            <>
+                              <div className="font-semibold text-neutral-50">{purchase.userId.name}</div>
+                              <div className="text-xs text-neutral-500">{purchase.userId.email}</div>
+                            </>
+                          ) : (
+                            <span className="text-neutral-500 text-xs italic">Unknown User</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {purchase.eventId ? (
+                            <>
+                              <div className="font-medium text-neutral-200">{purchase.eventId.title}</div>
+                              <div className="text-xs text-neutral-500 font-mono">/{purchase.eventId.slug}</div>
+                            </>
+                          ) : (
+                            <span className="text-neutral-500 text-xs">Unknown Event</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-emerald-500 font-display">
+                          {formatPrice(purchase.totalAmount)}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs text-neutral-400">
+                          {formatDate(purchase.paidAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {purchasesHasMore && (
+                <div className="flex justify-center pt-4">
+                  <button
+                    onClick={() => fetchTransactions(purchasesPage + 1)}
+                    disabled={isLoadingMore}
+                    className="btn btn-secondary btn-sm rounded-lg text-xs"
+                  >
+                    {isLoadingMore ? 'Loading...' : 'Load more'}
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-12 text-neutral-500 text-sm">No photo purchase transactions completed yet.</div>
           )
@@ -367,111 +456,112 @@ export default function TransactionsPage() {
 
       {/* Order Photo Slider Modal */}
       {previewOrder && previewOrder.photos.length > 0 && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn"
-          onClick={closeOrderPreview}
-        >
-          <button
-            className="absolute top-4 right-4 p-3 bg-neutral-900 hover:bg-neutral-850 text-neutral-400 hover:text-white rounded-full transition duration-150 border border-neutral-800"
-            onClick={closeOrderPreview}
-          >
-            <X className="w-6 h-6" />
-          </button>
-
-          <div
-            className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl border border-neutral-850 shadow-2xl bg-neutral-950"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-800">
-              <div>
-                <div className="text-sm font-bold text-neutral-50">Order #{previewOrder.orderNumber}</div>
-                <div className="text-xs text-neutral-500">
-                  {previewOrder.eventId?.title || 'Unknown Event'} • {formatPrice(previewOrder.totalAmount)}
-                </div>
-              </div>
-              <div className="text-xs font-mono text-neutral-400">
-                {previewIndex + 1} / {previewOrder.photos.length}
-              </div>
+        <div className="fixed inset-0 z-150 bg-black/95 flex flex-col overflow-hidden animate-fadeIn" onClick={closeOrderPreview}>
+          {/* Header / Top Bar */}
+          <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 bg-black/80 backdrop-blur-md text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-4">
+              <div className="text-sm font-medium">Order #{previewOrder.orderNumber}</div>
+              {previewOrder.photos.length > 1 && (
+                <span className="text-xs text-gray-400 font-medium">
+                  {previewIndex + 1} / {previewOrder.photos.length}
+                </span>
+              )}
             </div>
+            <button
+              type="button"
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition duration-150 cursor-pointer"
+              onClick={closeOrderPreview}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            {/* Image */}
-            <div className="relative flex items-center justify-center bg-black min-h-[300px] max-h-[calc(85vh-140px)]">
+          {/* Photo Container */}
+          <div 
+            className="flex-1 w-full flex items-center justify-center p-4 sm:p-8 relative overflow-hidden" 
+            onClick={closeOrderPreview}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            {/* Previous Button */}
+            {previewOrder.photos.length > 1 && (
+              <button
+                type="button"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/50 sm:bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition absolute left-2 sm:left-6 z-20 cursor-pointer shadow-lg border border-white/10"
+                onClick={(e) => { e.stopPropagation(); goToPrev(); }}
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* Photo Wrapper */}
+            <div className="relative max-w-full max-h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={previewOrder.photos[previewIndex].watermarkedUrl || previewOrder.photos[previewIndex].thumbnailUrl}
                 alt={`Photo ${previewIndex + 1}`}
-                className="max-w-full max-h-[calc(85vh-140px)] object-contain"
+                className="max-w-full max-h-[calc(100vh-180px)] object-contain rounded-xl shadow-2xl border border-white/10"
               />
-
-              {previewOrder.photos.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); goToPrev(); }}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/10 transition"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); goToNext(); }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/10 transition"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </>
-              )}
             </div>
 
-            {/* Thumbnail strip */}
+            {/* Next Button */}
             {previewOrder.photos.length > 1 && (
-              <div className="flex gap-2 p-3 overflow-x-auto border-t border-neutral-800 bg-neutral-950">
-                {previewOrder.photos.map((photo, idx) => (
-                  <button
-                    key={photo._id}
-                    type="button"
-                    onClick={() => setPreviewIndex(idx)}
-                    className={`relative w-14 h-14 rounded-lg overflow-hidden border transition flex-shrink-0 ${
-                      idx === previewIndex ? 'border-primary-500 ring-1 ring-primary-500' : 'border-neutral-800 hover:border-neutral-600'
-                    }`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.thumbnailUrl || photo.watermarkedUrl}
-                      alt={`Thumbnail ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/50 sm:bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition absolute right-2 sm:right-6 z-20 cursor-pointer shadow-lg border border-white/10"
+                onClick={(e) => { e.stopPropagation(); goToNext(); }}
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
             )}
+          </div>
+
+          {/* Footer / Control Bar */}
+          <div className="p-5 border-t border-white/10 bg-black/80 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-1 text-left">
+              <h4 className="text-sm font-bold text-white">Order #{previewOrder.orderNumber}</h4>
+              <p className="text-xs text-gray-400 font-light">
+                {previewOrder.eventId?.title || 'Unknown Event'} • {formatPrice(previewOrder.totalAmount)}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
       {/* Single Photo Preview Modal (for downloads) */}
       {previewPhotoUrl && (
-        <div
-          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn"
-          onClick={() => setPreviewPhotoUrl(null)}
-        >
-          <button
-            className="absolute top-4 right-4 p-3 bg-neutral-900 hover:bg-neutral-850 text-neutral-400 hover:text-white rounded-full transition duration-150 border border-neutral-800"
-            onClick={() => setPreviewPhotoUrl(null)}
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <div
-            className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl border border-neutral-850 shadow-2xl bg-neutral-950"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewPhotoUrl}
-              alt="Photo Preview"
-              className="max-w-full max-h-[85vh] object-contain rounded-2xl"
-            />
+        <div className="fixed inset-0 z-150 bg-black/95 flex flex-col overflow-hidden animate-fadeIn" onClick={() => setPreviewPhotoUrl(null)}>
+          {/* Header / Top Bar */}
+          <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 bg-black/80 backdrop-blur-md text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="text-sm font-medium">Download Preview</div>
+            <button
+              type="button"
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition duration-150 cursor-pointer"
+              onClick={() => setPreviewPhotoUrl(null)}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Photo Container */}
+          <div className="flex-1 w-full flex items-center justify-center p-4 sm:p-8 relative overflow-hidden" onClick={() => setPreviewPhotoUrl(null)}>
+            {/* Photo Wrapper */}
+            <div className="relative max-w-full max-h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewPhotoUrl}
+                alt="Photo Preview"
+                className="max-w-full max-h-[calc(100vh-180px)] object-contain rounded-xl shadow-2xl border border-white/10"
+              />
+            </div>
+          </div>
+
+          {/* Footer / Control Bar */}
+          <div className="p-5 border-t border-white/10 bg-black/80 backdrop-blur-md text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-1 text-left">
+              <h4 className="text-sm font-bold text-white">Photo Preview</h4>
+              <p className="text-xs text-gray-400 font-light">Downloaded photo preview</p>
+            </div>
           </div>
         </div>
       )}

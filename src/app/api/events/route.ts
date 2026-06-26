@@ -97,6 +97,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (session.user.role === 'admin' && !session.user.permissions?.manageEvents) {
+      return NextResponse.json(
+        { error: 'Forbidden: Insufficient permissions' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const result = createEventSchema.safeParse(body);
 

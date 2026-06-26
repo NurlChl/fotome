@@ -103,7 +103,7 @@ export const createOrderSchema = z.object({
     .min(1, 'At least one photo is required')
     .max(50, 'Maximum 50 photos per order'),
   eventId: z.string().min(1, 'Event ID is required'),
-  voucherId: z.string().optional(),
+  voucherId: z.string().nullable().optional(),
 });
 
 // ============================================
@@ -155,13 +155,13 @@ export const voucherSchema = z.object({
     .int('Minimal foto harus berupa bilangan bulat')
     .min(1, 'Minimal foto minimal 1'),
   discountType: z.enum(['percentage', 'fixed'], {
-    required_error: 'Tipe diskon wajib diisi',
+    message: 'Tipe diskon wajib diisi',
   }),
   discountValue: z
     .number()
     .min(1, 'Nilai diskon minimal 1'),
   status: z.enum(['draft', 'published'], {
-    required_error: 'Status voucher wajib diisi',
+    message: 'Status voucher wajib diisi',
   }),
 }).refine((data) => {
   if (data.discountType === 'percentage' && data.discountValue > 100) {

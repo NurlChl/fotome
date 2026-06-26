@@ -63,11 +63,12 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     }
 
     // Check ownership
-    if (
-      event.photographerId.toString() !== session.user.id &&
-      session.user.role !== 'admin' &&
-      session.user.role !== 'superadmin'
-    ) {
+    const isOwner = event.photographerId.toString() === session.user.id;
+    const isSuperadmin = session.user.role === 'superadmin';
+    const canManageEvents =
+      session.user.role === 'admin' && !!session.user.permissions?.manageEvents;
+
+    if (!isOwner && !isSuperadmin && !canManageEvents) {
       return NextResponse.json(
         { error: 'You can only edit your own events' },
         { status: 403 }
@@ -169,8 +170,8 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
 
     if (
       event.photographerId.toString() !== session.user.id &&
-      session.user.role !== 'admin' &&
-      session.user.role !== 'superadmin'
+      session.user.role !== 'superadmin' &&
+      !(session.user.role === 'admin' && session.user.permissions?.manageEvents)
     ) {
       return NextResponse.json(
         { error: 'You can only delete your own events' },

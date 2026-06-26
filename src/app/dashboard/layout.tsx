@@ -68,9 +68,10 @@ export default function DashboardLayout({
         return;
       }
 
-      // Only allow admin with manageEvents permission or superadmin
       if (role === 'admin') {
-        const hasPermission = session?.user?.permissions?.manageEvents;
+        const p = session?.user?.permissions;
+        const hasPermission =
+          !!p && (p.manageUsers || p.manageEvents || p.managePayouts || p.manageLogs);
         if (!hasPermission) {
           router.push('/');
           return;

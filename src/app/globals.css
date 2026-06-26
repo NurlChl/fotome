@@ -337,3 +337,13 @@
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
+
+/* Hide header when preview modal is open */
+body.preview-modal-open header,
+body.preview-modal-open .fixed.top-0 {
+  display: none !important;
+}
+
+body.preview-modal-open {
+  overflow: hidden;
+}

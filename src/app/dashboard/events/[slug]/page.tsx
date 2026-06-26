@@ -284,7 +284,7 @@ export default function ManageEventPage() {
         name: voucher.name,
         description: voucher.description || '',
         usageLimitPerUser: voucher.usageLimitPerUser ? voucher.usageLimitPerUser.toString() : '',
-        useAllowedUsers: voucher.allowedUserIds && voucher.allowedUserIds.length > 0,
+        useAllowedUsers: !!(voucher.allowedUserIds && voucher.allowedUserIds.length > 0),
         allowedUsers,
         minPhotos: voucher.minPhotos.toString(),
         discountType: voucher.discountType,

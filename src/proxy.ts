@@ -1,7 +1,16 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
-export default function proxy(request: NextRequest) {
+function applySecurityHeaders(response: NextResponse) {
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self)');
+  return response;
+}
+
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Get NextAuth.js session token
@@ -11,21 +20,25 @@ export default function proxy(request: NextRequest) {
     request.cookies.get('next-auth.session-token')?.value ||
     request.cookies.get('__Secure-next-auth.session-token')?.value;
 
-  const isAuthenticated = !!sessionToken;
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  const token = secret ? await getToken({ req: request, secret }) : null;
+  const isAuthenticated = !!token || (!secret && !!sessionToken);
+  const role = token?.role;
+  const isAdmin = role === 'admin' || role === 'superadmin';
 
   // Admin routing logic
   if (pathname.startsWith('/dashboard/admin')) {
-    if (!isAuthenticated) {
-      return NextResponse.redirect(new URL('/login/admin', request.url));
+    if (!isAuthenticated || !isAdmin) {
+      return applySecurityHeaders(NextResponse.redirect(new URL('/login/admin', request.url)));
     }
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   if (pathname === '/login/admin') {
-    if (isAuthenticated) {
-      return NextResponse.redirect(new URL('/dashboard/admin', request.url));
+    if (isAuthenticated && isAdmin) {
+      return applySecurityHeaders(NextResponse.redirect(new URL('/dashboard/admin', request.url)));
     }
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   // Regular user authentication pages (redirect authenticated users away)
@@ -33,39 +46,29 @@ export default function proxy(request: NextRequest) {
   if (authRoutes.some((route) => pathname === route || pathname.startsWith(route + '/'))) {
     if (pathname !== '/login/admin') { // Avoid overriding admin login
       if (isAuthenticated) {
-        return NextResponse.redirect(new URL('/', request.url));
+        return applySecurityHeaders(NextResponse.redirect(new URL('/', request.url)));
       }
-      return NextResponse.next();
+      return applySecurityHeaders(NextResponse.next());
     }
   }
 
   // Regular dashboard page (events/upload dashboard) is restricted to admin/superadmin
   if (pathname.startsWith('/dashboard')) {
-    if (!isAuthenticated) {
-      return NextResponse.redirect(new URL('/login/admin', request.url));
+    if (!isAuthenticated || !isAdmin) {
+      return applySecurityHeaders(NextResponse.redirect(new URL('/login/admin', request.url)));
     }
-    return NextResponse.next();
+    return applySecurityHeaders(NextResponse.next());
   }
 
   // Standard user protected routes
   const protectedUserRoutes = ['/my-photos', '/orders', '/settings'];
   if (protectedUserRoutes.some((route) => pathname.startsWith(route))) {
     if (!isAuthenticated) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return applySecurityHeaders(NextResponse.redirect(new URL('/login', request.url)));
     }
   }
 
-  // Security headers
-  const response = NextResponse.next();
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set(
-    'Permissions-Policy',
-    'camera=(self), microphone=(), geolocation=(self)'
-  );
-
-  return response;
+  return applySecurityHeaders(NextResponse.next());
 }
 
 export const config = {

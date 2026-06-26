@@ -61,7 +61,11 @@ async function resolveMongodbSrv(uri) {
   }
 }
 
-const originalUri = 'mongodb+srv://nurulcholil2373_db_user:%40Topsellbelanja2026@fotome.pxiivmb.mongodb.net/?appName=fotome';
+const originalUri = process.env.MONGODB_URI;
+if (!originalUri) {
+  console.error('❌ Error: MONGODB_URI environment variable is required');
+  process.exit(1);
+}
 
 resolveMongodbSrv(originalUri)
   .then(async (resolvedUri) => {
@@ -91,7 +95,8 @@ resolveMongodbSrv(originalUri)
       adminPermissions: {
         manageUsers: true,
         manageEvents: true,
-        managePayouts: true
+        managePayouts: true,
+        manageLogs: true
       }
     };
 
@@ -110,9 +115,6 @@ resolveMongodbSrv(originalUri)
       );
       console.log(`=== SUCCESS ===`);
       console.log(`User ${emailClean} is now superadmin.`);
-      if (password) {
-        console.log(`Password has been set to: ${password}`);
-      }
     } else {
       console.log(`User ${emailClean} not found. Creating a new superadmin account...`);
       if (!password) {
@@ -132,7 +134,8 @@ resolveMongodbSrv(originalUri)
         adminPermissions: {
           manageUsers: true,
           manageEvents: true,
-          managePayouts: true
+          managePayouts: true,
+          manageLogs: true
         },
         createdAt: new Date(),
         updatedAt: new Date()
@@ -142,7 +145,6 @@ resolveMongodbSrv(originalUri)
       console.log(`=== SUCCESS ===`);
       console.log(`Created new superadmin:`);
       console.log(`- Email: ${emailClean}`);
-      console.log(`- Password: ${password}`);
     }
 
     process.exit(0);

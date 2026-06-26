@@ -39,25 +39,39 @@ export default function ManualClaimsPage() {
 
   const [claims, setClaims] = useState<ClaimEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
   const [selectedClaim, setSelectedClaim] = useState<ClaimEntry | null>(null);
   const [activeTab, setActiveTab] = useState<'manual' | 'ai-verified' | 'false-positive'>('manual');
 
   const canManageUsers = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.manageUsers;
 
-  async function fetchClaims() {
+  async function fetchClaims(nextPage = 1) {
     try {
-      setIsLoading(true);
-      const res = await fetch('/api/admin/claims');
+      if (nextPage === 1) {
+        setIsLoading(true);
+      } else {
+        setIsLoadingMore(true);
+      }
+      const res = await fetch(`/api/admin/claims?page=${nextPage}&limit=50`);
       const data = await res.json();
       if (res.ok) {
-        // Store all claims without filtering (we'll filter by tab)
-        setClaims(data.claims || []);
+        const nextClaims = data.claims || [];
+        if (nextPage === 1) {
+          setClaims(nextClaims);
+        } else {
+          setClaims((prev) => [...prev, ...nextClaims]);
+        }
+        setPage(nextPage);
+        setHasMore(!!data.pagination?.hasMore);
       }
     } catch (error) {
       console.error('Error fetching claims:', error);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   }
 
@@ -79,19 +93,23 @@ export default function ManualClaimsPage() {
   const filteredClaims = getFilteredClaims();
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login/admin');
-      return;
-    }
+    const timer = setTimeout(() => {
+      if (status === 'unauthenticated') {
+        router.push('/login/admin');
+        return;
+      }
 
-    if (status === 'authenticated' && !canManageUsers) {
-      router.push('/dashboard');
-      return;
-    }
+      if (status === 'authenticated' && !canManageUsers) {
+        router.push('/dashboard');
+        return;
+      }
 
-    if (canManageUsers) {
-      fetchClaims();
-    }
+      if (canManageUsers) {
+        fetchClaims(1);
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [status, canManageUsers, router]);
 
   const formatDate = (dateStr: string) => {
@@ -137,7 +155,7 @@ export default function ManualClaimsPage() {
           </p>
         </div>
         <button
-          onClick={fetchClaims}
+          onClick={() => fetchClaims(1)}
           className="btn btn-secondary btn-sm rounded-lg text-xs"
         >
           Refresh data
@@ -221,92 +239,106 @@ export default function ManualClaimsPage() {
           </div>
 
           {filteredClaims.length > 0 ? (
-            <div className="overflow-x-auto border border-neutral-900 rounded-xl">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="bg-neutral-950/50 border-b border-neutral-900 text-neutral-400 text-xs uppercase font-medium">
-                    <th className="px-6 py-4">Account</th>
-                    <th className="px-6 py-4">Target Photo</th>
-                    <th className="px-6 py-4">Selfie Verification</th>
-                    <th className="px-6 py-4">IP Address</th>
-                    <th className="px-6 py-4">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-900">
-                  {filteredClaims.map((claim) => (
-                    <tr 
-                      key={claim._id} 
-                      className={`hover:bg-neutral-900/10 text-neutral-300 transition ${
-                        selectedClaim?._id === claim._id ? 'bg-primary-500/5' : ''
-                      }`}
-                    >
-                      <td className="px-6 py-4">
-                        {claim.userId ? (
-                          <>
-                            <div className="font-semibold text-neutral-50">{claim.userId.name}</div>
-                            <div className="text-xs text-neutral-500 mt-0.5">{claim.userId.email}</div>
-                          </>
-                        ) : (
-                          <span className="text-neutral-500 text-xs italic">Unknown User</span>
-                        )}
-                        <div className="text-[10px] text-neutral-500 mt-1 font-mono">{formatDate(claim.createdAt)}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {claim.photoId ? (
-                          <div 
-                            className="w-14 h-14 rounded-lg overflow-hidden border border-neutral-800 bg-neutral-950 relative group cursor-pointer"
-                            onClick={() => setPreviewPhotoUrl(claim.photoId?.watermarkedUrl || claim.photoId?.thumbnailUrl || null)}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img 
-                              src={claim.photoId.thumbnailUrl || claim.photoId.watermarkedUrl} 
-                              alt="Target Photo" 
-                              className="w-full h-full object-cover group-hover:scale-105 transition"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                              <Eye className="w-3.5 h-3.5 text-white" />
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-neutral-500 text-xs italic">Deleted Photo</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        {claim.selfieUrl ? (
-                          <div 
-                            className="w-14 h-14 rounded-lg overflow-hidden border border-neutral-850 bg-neutral-950 relative group cursor-pointer"
-                            onClick={() => setPreviewPhotoUrl(claim.selfieUrl || null)}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img 
-                              src={claim.selfieUrl} 
-                              alt="Verification Selfie" 
-                              className="w-full h-full object-cover group-hover:scale-105 transition"
-                            />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                              <Eye className="w-3.5 h-3.5 text-white" />
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-neutral-500 text-xs italic">No Selfie</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-neutral-400">
-                        {claim.ipAddress}
-                      </td>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => setSelectedClaim(claim)}
-                          className="btn btn-secondary btn-xs rounded-lg text-xs"
-                        >
-                          Details
-                        </button>
-                      </td>
+            <>
+              <div className="overflow-x-auto border border-neutral-900 rounded-xl">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-neutral-950/50 border-b border-neutral-900 text-neutral-400 text-xs uppercase font-medium">
+                      <th className="px-6 py-4">Account</th>
+                      <th className="px-6 py-4">Target Photo</th>
+                      <th className="px-6 py-4">Selfie Verification</th>
+                      <th className="px-6 py-4">IP Address</th>
+                      <th className="px-6 py-4">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-900">
+                    {filteredClaims.map((claim) => (
+                      <tr 
+                        key={claim._id} 
+                        className={`hover:bg-neutral-900/10 text-neutral-300 transition ${
+                          selectedClaim?._id === claim._id ? 'bg-primary-500/5' : ''
+                        }`}
+                      >
+                        <td className="px-6 py-4">
+                          {claim.userId ? (
+                            <>
+                              <div className="font-semibold text-neutral-50">{claim.userId.name}</div>
+                              <div className="text-xs text-neutral-500 mt-0.5">{claim.userId.email}</div>
+                            </>
+                          ) : (
+                            <span className="text-neutral-500 text-xs italic">Unknown User</span>
+                          )}
+                          <div className="text-[10px] text-neutral-500 mt-1 font-mono">{formatDate(claim.createdAt)}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          {claim.photoId ? (
+                            <div 
+                              className="w-14 h-14 rounded-lg overflow-hidden border border-neutral-800 bg-neutral-950 relative group cursor-pointer"
+                              onClick={() => setPreviewPhotoUrl(claim.photoId?.watermarkedUrl || claim.photoId?.thumbnailUrl || null)}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img 
+                                src={claim.photoId.thumbnailUrl || claim.photoId.watermarkedUrl} 
+                                alt="Target Photo" 
+                                className="w-full h-full object-cover group-hover:scale-105 transition"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                                <Eye className="w-3.5 h-3.5 text-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-neutral-500 text-xs italic">Deleted Photo</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          {claim.selfieUrl ? (
+                            <div 
+                              className="w-14 h-14 rounded-lg overflow-hidden border border-neutral-850 bg-neutral-950 relative group cursor-pointer"
+                              onClick={() => setPreviewPhotoUrl(claim.selfieUrl || null)}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img 
+                                src={claim.selfieUrl} 
+                                alt="Verification Selfie" 
+                                className="w-full h-full object-cover group-hover:scale-105 transition"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                                <Eye className="w-3.5 h-3.5 text-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-neutral-500 text-xs italic">No Selfie</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs text-neutral-400">
+                          {claim.ipAddress}
+                        </td>
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setSelectedClaim(claim)}
+                            className="btn btn-secondary btn-xs rounded-lg text-xs"
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <button
+                    onClick={() => fetchClaims(page + 1)}
+                    disabled={isLoadingMore}
+                    className="btn btn-secondary btn-sm rounded-lg text-xs"
+                  >
+                    {isLoadingMore ? 'Loading...' : 'Load more'}
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-12 text-neutral-500 text-sm">
               {activeTab === 'manual' && 'No manual claim logs found.'}
@@ -495,7 +527,7 @@ export default function ManualClaimsPage() {
             </div>
           ) : (
             <div className="text-center py-12 text-neutral-500 text-sm">
-              Please click "Details" on a manual claim log entry to run face descriptor checks.
+              Please click &quot;Details&quot; on a manual claim log entry to run face descriptor checks.
             </div>
           )}
         </div>

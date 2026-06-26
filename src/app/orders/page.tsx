@@ -47,6 +47,23 @@ function OrdersContent() {
       const data = await res.json();
       if (res.ok && data.orders) {
         setOrders(data.orders);
+
+        // Sync payment status for pending orders
+        const pendingOrders = data.orders.filter((o: OrderData) => o.status === 'pending');
+        for (const order of pendingOrders) {
+          try {
+            await fetch(`/api/orders/${order._id}/sync-payment`);
+          } catch (error) {
+            console.error('Error syncing payment status for order:', order._id, error);
+          }
+        }
+
+        // Refetch orders after syncing to get updated status
+        const refetchRes = await fetch('/api/orders');
+        const refetchData = await refetchRes.json();
+        if (refetchRes.ok && refetchData.orders) {
+          setOrders(refetchData.orders);
+        }
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -68,23 +85,17 @@ function OrdersContent() {
 
   useEffect(() => {
     const success = searchParams.get('success') === 'true';
-    const pending = searchParams.get('pending') === 'true';
-    const error = searchParams.get('error') === 'true';
 
     const timer = setTimeout(() => {
       if (success) {
-        setNotification({ type: 'success', message: 'Payment successful! Your photos are now available in My Gallery.' });
-      } else if (pending) {
-        setNotification({ type: 'pending', message: 'Payment is pending. We will update your order once the payment is confirmed.' });
-      } else if (error) {
-        setNotification({ type: 'error', message: 'Payment failed or was cancelled. Please try again.' });
+        // Redirect to My Photos on successful payment
+        router.push('/my-photos');
+        return;
       }
-
-      setTimeout(() => setNotification(null), 8000);
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [searchParams]);
+  }, [searchParams, router]);
 
 
 
@@ -264,6 +275,10 @@ function OrdersContent() {
                     <Link href="/my-photos" className="btn btn-secondary rounded-xl px-6 py-2.5 flex items-center justify-center gap-2 text-sm">
                       <Download className="w-4 h-4" /> View Photos
                     </Link>
+                  )}
+
+                  {order.status === 'cancelled' && (
+                    <div className="text-xs text-neutral-500 italic">Order cancelled or expired</div>
                   )}
                 </div>
               </div>

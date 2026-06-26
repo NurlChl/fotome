@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
-import { Event, Voucher, VoucherUsage, User } from '@/lib/db/models';
+import { Event, Voucher, VoucherUsage } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 import { voucherSchema } from '@/lib/validation';
 
@@ -32,32 +32,47 @@ export async function GET(
       
       // For each published voucher, check if it's usable by current user
       if (session?.user?.id) {
-        const usableVouchers = [];
-        for (const voucher of publishedVouchers) {
-          let usable = true;
+        const limitedVoucherIds = publishedVouchers
+          .filter((v) => !!v.usageLimitPerUser)
+          .map((v) => v._id);
 
-          // Check if voucher is only for specific users
-          if (voucher.allowedUserIds && voucher.allowedUserIds.length > 0) {
-            if (!voucher.allowedUserIds.some(id => id.toString() === session.user.id)) {
-              usable = false;
-            }
-          }
-
-          // Check usage limit per user
-          if (voucher.usageLimitPerUser) {
-            const usageCount = await VoucherUsage.countDocuments({
-              voucherId: voucher._id,
-              userId: session.user.id
-            });
-            if (usageCount >= voucher.usageLimitPerUser) {
-              usable = false;
-            }
-          }
-
-          if (usable) {
-            usableVouchers.push(voucher);
+        const usageByVoucherId = new Map<string, number>();
+        if (limitedVoucherIds.length > 0) {
+          const usageCounts = await VoucherUsage.aggregate([
+            {
+              $match: {
+                voucherId: { $in: limitedVoucherIds },
+                userId: session.user.id,
+              },
+            },
+            {
+              $group: {
+                _id: '$voucherId',
+                count: { $sum: 1 },
+              },
+            },
+          ]);
+          for (const row of usageCounts) {
+            usageByVoucherId.set(row._id.toString(), row.count);
           }
         }
+
+        const usableVouchers = publishedVouchers.filter((voucher) => {
+          if (voucher.allowedUserIds && voucher.allowedUserIds.length > 0) {
+            if (!voucher.allowedUserIds.some((id) => id.toString() === session.user.id)) {
+              return false;
+            }
+          }
+
+          if (voucher.usageLimitPerUser) {
+            const usageCount = usageByVoucherId.get(voucher._id.toString()) || 0;
+            if (usageCount >= voucher.usageLimitPerUser) {
+              return false;
+            }
+          }
+
+          return true;
+        });
         return NextResponse.json({ vouchers: usableVouchers });
       }
 
@@ -97,8 +112,8 @@ export async function POST(
     // Check ownership
     if (
       event.photographerId.toString() !== session.user.id &&
-      session.user.role !== 'admin' &&
-      session.user.role !== 'superadmin'
+      session.user.role !== 'superadmin' &&
+      !(session.user.role === 'admin' && session.user.permissions?.manageEvents)
     ) {
       return NextResponse.json(
         { error: 'You can only edit your own events' },

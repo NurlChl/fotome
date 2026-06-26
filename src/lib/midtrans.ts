@@ -50,14 +50,10 @@ export async function createSnapToken(params: {
       phone: params.customerDetails.phone || '',
     },
     item_details: params.itemDetails,
-    credit_card: {
-      secure: true,
-    },
-    callbacks: {
-      finish: `${process.env.NEXT_PUBLIC_APP_URL}/orders?success=true`,
-      error: `${process.env.NEXT_PUBLIC_APP_URL}/orders?error=true`,
-      pending: `${process.env.NEXT_PUBLIC_APP_URL}/orders?pending=true`,
-    },
+    // Remove enabled_payments to show all available payment methods in production
+    // In sandbox, Midtrans may have limited payment methods available
+    // Note: Client-side callbacks (onSuccess, onPending, onError) handle redirects
+    // Webhook handles actual payment status updates
   };
 
   const response = await fetch(`${MIDTRANS_API_URL}/transactions`, {

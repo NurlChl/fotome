@@ -88,8 +88,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     // Check ownership
     if (
       event.photographerId.toString() !== session.user.id &&
-      session.user.role !== 'admin' &&
-      session.user.role !== 'superadmin'
+      session.user.role !== 'superadmin' &&
+      !(session.user.role === 'admin' && session.user.permissions?.manageEvents)
     ) {
       return NextResponse.json(
         { error: 'You can only upload to your own events' },

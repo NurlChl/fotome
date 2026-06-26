@@ -222,90 +222,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Biometric Owner Verification for new items being purchased (except for Admin, Superadmin, or Photographer Owner)
-    const isPhotographerOwner = session.user.id === event.photographerId.toString();
-    const isBypassUser = session.user.role === 'admin' || session.user.role === 'superadmin' || isPhotographerOwner;
-
-    if (!isBypassUser) {
-      const fullUser = await User.findById(session.user.id);
-      if (!fullUser || !fullUser.faceDescriptor || fullUser.faceDescriptor.length !== 128) {
-        return NextResponse.json(
-          { error: 'Biometric registration required. Please complete face recognition in your profile settings to buy photos.' },
-          { status: 400 }
-        );
-      }
-
-      // Load user's hard negatives for continuous learning
-      const hardNegatives = await getUserHardNegatives(session.user.id);
-
-      for (const photo of newPhotos) {
-        const photoFaces = await FaceDescriptor.find({ photoId: photo._id });
-        if (photoFaces.length > 0) {
-          let hasMatch = false;
-          let bestMatchDescriptor: number[] | null = null;
-          let lowestDistance = Infinity;
-          
-          for (const face of photoFaces) {
-            const dist = euclideanDistance(fullUser.faceDescriptor, face.descriptor);
-            
-            if (dist < lowestDistance) {
-              lowestDistance = dist;
-              bestMatchDescriptor = face.descriptor;
-            }
-            
-            // Check if this face matches a hard negative
-            const isHardNegative = isHardNegativeMatch(face.descriptor, hardNegatives, dist);
-            
-            // Only count as match if distance is within threshold AND not a hard negative
-            if (dist <= 0.55 && !isHardNegative) {
-              hasMatch = true;
-              // Don't break - we want to find the best match for learning
-            }
-          }
-          
-          if (!hasMatch) {
-            return NextResponse.json(
-              { error: 'Biometric verification failed: You are not present in one or more of the selected photos.' },
-              { status: 403 }
-            );
-          }
-          
-          // Auto-save matched photos for continuous learning
-          if (bestMatchDescriptor && hasMatch) {
-            await saveClaimedPhotoAndLearn(
-              session.user.id,
-              photo._id.toString(),
-              event._id.toString(),
-              bestMatchDescriptor
-            );
-          }
-        } else {
-          // If the photo contains no faces, but it has hasFaces set to true, block it
-          if (photo.hasFaces) {
-            return NextResponse.json(
-              { error: 'Biometric verification pending for one or more selected photos.' },
-              { status: 403 }
-            );
-          }
-        }
-      }
-    }
-
-    // Calculate total
+    // Calculate total first to determine if it's a free event
+    const totalBeforeDiscount = newPhotos.length * event.pricePerPhoto;
+    const totalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
     const commissionPercent =
       parseInt(process.env.PLATFORM_COMMISSION_PERCENT || '25') / 100;
 
-    const totalBeforeDiscount = newPhotos.length * event.pricePerPhoto;
-    const totalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
+    // Biometric verification is disabled to simplify checkout flow
+    // Users can now purchase any photos without face recognition requirement
 
     // Create order
     const order = await Order.create({
       userId: session.user.id,
       totalAmount,
       discountAmount,
-      voucherId: voucher ? voucher._id : null,
+      voucherId: voucher ? voucher._id : undefined,
       status: 'pending',
-    });
+    }) as any;
 
     // Create order items (use adjusted per-item price based on discount)
     const orderItems = newPhotos.map((photo) => {
@@ -342,6 +275,11 @@ export async function POST(req: NextRequest) {
 
     if (totalAmount > 0) {
       try {
+        // Calculate per-item price after discount
+        const adjustedPricePerPhoto = totalAmount > 0 
+          ? Math.round(event.pricePerPhoto * (totalAmount / totalBeforeDiscount)) 
+          : event.pricePerPhoto;
+
         const snapData = await createSnapToken({
           orderId: order.orderNumber,
           amount: totalAmount,
@@ -352,7 +290,7 @@ export async function POST(req: NextRequest) {
           itemDetails: newPhotos.map((photo) => ({
             id: photo._id.toString(),
             name: `Photo from ${event.title}`,
-            price: event.pricePerPhoto,
+            price: adjustedPricePerPhoto,
             quantity: 1,
           })),
         });

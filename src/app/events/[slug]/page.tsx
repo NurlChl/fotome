@@ -5,28 +5,29 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { getFaceDescriptor } from '@/lib/faceDetector';
-import { 
-  MapPin, 
-  Calendar as CalendarIcon, 
-  Image as ImageIcon, 
-  Tag, 
-  Camera, 
-  Upload, 
-  ChevronLeft, 
+import {
+  MapPin,
+  Calendar as CalendarIcon,
+  Image as ImageIcon,
+  Tag,
+  Camera,
+  Upload,
+  ChevronLeft,
   ChevronRight,
-  Loader2, 
-  Check, 
-  AlertCircle, 
-  Lock, 
-  Download, 
-  QrCode, 
+  Loader2,
+  Check,
+  AlertCircle,
+  Lock,
+  Download,
+  QrCode,
   Landmark,
   X,
   Search,
   RefreshCw,
   Bookmark,
   BookmarkCheck,
-  Clock
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 
 interface PhotographerData {
@@ -303,6 +304,8 @@ export default function EventPage() {
   const modalStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartX = useRef<number>(0);
+  const touchEndX = useRef<number>(0);
 
   // Fetch event data and vouchers
   useEffect(() => {
@@ -1077,9 +1080,9 @@ export default function EventPage() {
         throw new Error(orderData.error || 'Failed to create order');
       }
 
-      // 2. If free event, redirect to My Orders
+      // 2. If free event, redirect to My Gallery
       if (orderData.order.totalAmount === 0) {
-        router.push('/orders?success=true');
+        router.push('/my-photos');
         return;
       }
 
@@ -1178,54 +1181,13 @@ export default function EventPage() {
         console.log('Payment completed:', payData);
       }
 
-      // Step 3: Download photos
-      for (let i = 0; i < photoIds.length; i++) {
-        const photoId = photoIds[i];
-        if (!checkFaceMatch(photoId)) {
-          setIsDownloadingFree(false);
-          setBulkDownloadProgress(null);
-          return;
-        }
-        
-        setBulkDownloadProgress({ 
-          current: i, 
-          total: photoIds.length, 
-          status: `Mengunduh foto ${i + 1} dari ${photoIds.length}...` 
-        });
-
-        const res = await fetch(`/api/photos/${photoId}/download?download=true`);
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || 'Failed to download photo');
-        }
-
-        const blob = await res.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = `FotoMe-Free-${photoId.substring(18)}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-
-        // Wait 800ms between downloads to avoid popup blocking
-        if (i < photoIds.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 800));
-        }
-      }
-      
-      setBulkDownloadProgress({ 
-        current: photoIds.length, 
-        total: photoIds.length, 
-        status: '✓ Semua foto berhasil diunduh! Order tersimpan di My Orders.' 
-      });
+      // Step 3: Redirect to My Gallery for download
       setSelectedPhotos(new Set()); // Reset selection
+      setBulkDownloadProgress(null);
+      setIsDownloadingFree(false);
       
-      setTimeout(() => {
-        setBulkDownloadProgress(null);
-      }, 3000);
+      // Redirect to My Gallery with success message
+      router.push('/my-photos?success=true');
     } catch (error) {
       console.error('Free download error:', error);
       setErrorPopupMessage(error instanceof Error ? error.message : 'Pengunduhan gagal. Silakan coba lagi.');
@@ -1292,6 +1254,43 @@ export default function EventPage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewPhoto, currentIndex, previewList]);
+
+  // Touch/swipe navigation for preview modal
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.changedTouches[0].screenX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    touchEndX.current = e.changedTouches[0].screenX;
+    handleSwipe();
+  };
+
+  const handleSwipe = () => {
+    const swipeThreshold = 50;
+    const diff = touchStartX.current - touchEndX.current;
+
+    if (Math.abs(diff) > swipeThreshold) {
+      if (diff > 0 && currentIndex < previewList.length - 1) {
+        // Swipe left - go to next
+        setPreviewPhoto(previewList[currentIndex + 1]);
+      } else if (diff < 0 && currentIndex > 0) {
+        // Swipe right - go to previous
+        setPreviewPhoto(previewList[currentIndex - 1]);
+      }
+    }
+  };
+
+  // Hide header when preview is active
+  useEffect(() => {
+    if (previewPhoto) {
+      document.body.classList.add('preview-modal-open');
+    } else {
+      document.body.classList.remove('preview-modal-open');
+    }
+    return () => {
+      document.body.classList.remove('preview-modal-open');
+    };
+  }, [previewPhoto]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('id-ID', {
@@ -1835,16 +1834,16 @@ export default function EventPage() {
                     {event.pricePerPhoto === 0 ? (
                       <button 
                         className="btn btn-primary rounded-xl px-8 py-3 shadow-lg shadow-primary-500/20 text-sm font-semibold flex items-center gap-2"
-                        onClick={handleFreeDownload}
+                        onClick={handlePurchaseClick}
                         disabled={isDownloadingFree}
                       >
                         {isDownloadingFree ? (
                           <>
-                            <Loader2 className="w-4 h-4 animate-spin" /> {downloadProgress}
+                            <Loader2 className="w-4 h-4 animate-spin" /> Memproses...
                           </>
                         ) : (
                           <>
-                            <Download className="w-4 h-4" /> Unduh Gratis ({selectedPhotos.size} Foto)
+                            <Download className="w-4 h-4" /> Beli Gratis ({selectedPhotos.size} Foto)
                           </>
                         )}
                       </button>
@@ -2121,16 +2120,16 @@ export default function EventPage() {
                 {event.pricePerPhoto === 0 ? (
                   <button 
                     className="btn btn-primary rounded-xl px-8 py-3 shadow-lg shadow-primary-500/20 text-sm font-semibold flex items-center gap-2"
-                    onClick={handleFreeDownload}
+                    onClick={handlePurchaseClick}
                     disabled={isDownloadingFree}
                   >
                     {isDownloadingFree ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Mengunduh...
+                        <Loader2 className="w-4 h-4 animate-spin" /> Memproses...
                       </>
                     ) : (
                       <>
-                        <Download className="w-4 h-4" /> Unduh Gratis ({selectedPhotos.size} Foto)
+                        <Download className="w-4 h-4" /> Beli Gratis ({selectedPhotos.size} Foto)
                       </>
                     )}
                   </button>
@@ -2286,67 +2285,79 @@ export default function EventPage() {
               </div>
             </div>
 
-            <div className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3">
-              Pilih Metode Pembayaran
-            </div>
-
-            <div className="space-y-2 mb-6">
-              <div 
-                className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition duration-150 ${
-                  selectedPaymentMethod === 'qris' 
-                    ? 'border-primary-500 bg-primary-500/5' 
-                    : 'border-neutral-850 hover:border-neutral-750 hover:bg-neutral-900/40'
-                }`}
-                onClick={() => setSelectedPaymentMethod('qris')}
-              >
-                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  selectedPaymentMethod === 'qris' ? 'border-primary-500' : 'border-neutral-700'
-                }`}>
-                  {selectedPaymentMethod === 'qris' && <div className="w-2.5 h-2.5 rounded-full bg-primary-500" />}
+            {Math.max(0, selectedPhotos.size * event.pricePerPhoto - discountAmount) > 0 ? (
+              <>
+                <div className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3">
+                  Pilih Metode Pembayaran
                 </div>
-                <QrCode className="w-5 h-5 text-neutral-400" />
+
+                <div className="space-y-2 mb-6">
+                  <div
+                    className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition duration-150 ${
+                      selectedPaymentMethod === 'qris'
+                        ? 'border-primary-500 bg-primary-500/5'
+                        : 'border-neutral-850 hover:border-neutral-750 hover:bg-neutral-900/40'
+                    }`}
+                    onClick={() => setSelectedPaymentMethod('qris')}
+                  >
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                      selectedPaymentMethod === 'qris' ? 'border-primary-500' : 'border-neutral-700'
+                    }`}>
+                      {selectedPaymentMethod === 'qris' && <div className="w-2.5 h-2.5 rounded-full bg-primary-500" />}
+                    </div>
+                    <QrCode className="w-5 h-5 text-neutral-400" />
+                    <div>
+                      <div className="font-medium text-neutral-50 text-xs sm:text-sm">QRIS (Scan & Pay)</div>
+                      <div className="text-[10px] text-neutral-500 mt-0.5">Konfirmasi pembayaran otomatis secara instan</div>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition duration-150 ${
+                      selectedPaymentMethod === 'va'
+                        ? 'border-primary-500 bg-primary-500/5'
+                        : 'border-neutral-850 hover:border-neutral-750 hover:bg-neutral-900/40'
+                    }`}
+                    onClick={() => setSelectedPaymentMethod('va')}
+                  >
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                      selectedPaymentMethod === 'va' ? 'border-primary-500' : 'border-neutral-700'
+                    }`}>
+                      {selectedPaymentMethod === 'va' && <div className="w-2.5 h-2.5 rounded-full bg-primary-500" />}
+                    </div>
+                    <Landmark className="w-5 h-5 text-neutral-400" />
+                    <div>
+                      <div className="font-medium text-neutral-50 text-xs sm:text-sm">Virtual Account Transfer</div>
+                      <div className="text-[10px] text-neutral-500 mt-0.5">Transfer antar rekening bank</div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                 <div>
-                  <div className="font-medium text-neutral-50 text-xs sm:text-sm">QRIS (Scan & Pay)</div>
-                  <div className="text-[10px] text-neutral-500 mt-0.5">Konfirmasi pembayaran otomatis secara instan</div>
+                  <div className="font-medium text-emerald-50 text-sm">Gratis</div>
+                  <div className="text-[10px] text-emerald-400/70 mt-0.5">Tidak perlu pembayaran</div>
                 </div>
               </div>
-
-              <div 
-                className={`flex items-center gap-3 p-3.5 border rounded-xl cursor-pointer transition duration-150 ${
-                  selectedPaymentMethod === 'va' 
-                    ? 'border-primary-500 bg-primary-500/5' 
-                    : 'border-neutral-850 hover:border-neutral-750 hover:bg-neutral-900/40'
-                }`}
-                onClick={() => setSelectedPaymentMethod('va')}
-              >
-                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                  selectedPaymentMethod === 'va' ? 'border-primary-500' : 'border-neutral-700'
-                }`}>
-                  {selectedPaymentMethod === 'va' && <div className="w-2.5 h-2.5 rounded-full bg-primary-500" />}
-                </div>
-                <Landmark className="w-5 h-5 text-neutral-400" />
-                <div>
-                  <div className="font-medium text-neutral-50 text-xs sm:text-sm">Virtual Account Transfer</div>
-                  <div className="text-[10px] text-neutral-500 mt-0.5">Transfer antar rekening bank</div>
-                </div>
-              </div>
-            </div>
+            )}
 
             <div className="flex gap-3">
-              <button 
-                className="btn btn-secondary flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-semibold" 
+              <button
+                className="btn btn-secondary flex-1 py-2.5 rounded-xl text-xs sm:text-sm font-semibold"
                 onClick={() => setIsCheckoutOpen(false)}
                 disabled={isProcessingPayment}
               >
                 Batal
               </button>
-              <button 
-                className="btn btn-primary flex-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-primary-500/20" 
+              <button
+                className="btn btn-primary flex-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-primary-500/20"
                 onClick={handleConfirmPayment}
                 disabled={isProcessingPayment}
                 id="btn-confirm-payment"
               >
-                {isProcessingPayment ? 'Processing...' : 'Bayar Sekarang'}
+                {isProcessingPayment ? 'Processing...' : (Math.max(0, selectedPhotos.size * event.pricePerPhoto - discountAmount) > 0 ? 'Bayar Sekarang' : 'Bayar Gratis')}
               </button>
             </div>
           </div>
@@ -2382,7 +2393,12 @@ export default function EventPage() {
           </div>
 
           {/* Photo Container */}
-          <div className="flex-1 w-full flex items-center justify-center p-4 sm:p-8 relative overflow-hidden" onClick={() => setPreviewPhoto(null)}>
+          <div 
+            className="flex-1 w-full flex items-center justify-center p-4 sm:p-8 relative overflow-hidden" 
+            onClick={() => setPreviewPhoto(null)}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             {/* Previous Button */}
             {currentIndex > 0 && (
               <button
@@ -2549,91 +2565,6 @@ export default function EventPage() {
                   : selectedPhotos.has(previewPhoto.photo._id)
                   ? 'Dipilih'
                   : 'Pilih Foto'}
-              </button>
-
-              <button
-                type="button"
-                className={`btn flex-1 sm:flex-initial rounded-xl px-6 py-2.5 text-xs font-semibold flex items-center justify-center gap-2 border transition duration-200 ${
-                  !isPhotoMatchingFace(previewPhoto.photo._id) || isDownloadingSingle || (event.pricePerPhoto > 0)
-                    ? 'bg-neutral-900 border-neutral-800 text-neutral-500 cursor-not-allowed opacity-50'
-                    : 'bg-white/10 border-white/10 text-white hover:bg-white/20 cursor-pointer'
-                }`}
-                onClick={async () => {
-                  if (!isPhotoMatchingFace(previewPhoto.photo._id) || isDownloadingSingle || !event) return;
-                  
-                  // Block download if event is paid
-                  if (event.pricePerPhoto > 0) {
-                    setErrorPopupMessage('Foto ini berbayar. Silakan tambahkan ke keranjang dan lakukan checkout untuk mengunduh.');
-                    return;
-                  }
-                  
-                  setIsDownloadingSingle(true);
-                  try {
-                    // Step 1: Create Order for single photo
-                    const orderRes = await fetch('/api/orders', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        photoIds: [previewPhoto.photo._id],
-                        eventId: event._id,
-                      }),
-                    });
-
-                    const orderData = await orderRes.json();
-                    if (!orderRes.ok) {
-                      throw new Error(orderData.error || 'Failed to create order');
-                    }
-
-                    // Step 2: If free, auto-complete payment
-                    if (orderData.order.totalAmount === 0) {
-                      const payRes = await fetch('/api/orders/mock-pay', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          orderId: orderData.order.id,
-                        }),
-                      });
-
-                      const payData = await payRes.json();
-                      if (!payRes.ok) {
-                        throw new Error(payData.error || 'Payment processing failed');
-                      }
-                    }
-
-                    // Step 3: Download photo
-                    const res = await fetch(`/api/photos/${previewPhoto.photo._id}/download?download=true`);
-                    if (!res.ok) {
-                      const errorData = await res.json().catch(() => ({}));
-                      throw new Error(errorData.error || 'Failed to download photo');
-                    }
-                    const blob = await res.blob();
-                    const blobUrl = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = blobUrl;
-                    link.download = `FotoMe-${previewPhoto.photo._id}.jpg`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(blobUrl);
-                  } catch (err) {
-                    console.error('Download error:', err);
-                    setErrorPopupMessage(err instanceof Error ? err.message : 'Pengunduhan gagal. Silakan coba lagi.');
-                  } finally {
-                    setIsDownloadingSingle(false);
-                  }
-                }}
-                disabled={!isPhotoMatchingFace(previewPhoto.photo._id) || isDownloadingSingle || (event.pricePerPhoto > 0)}
-              >
-                {isDownloadingSingle ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Mengunduh...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" /> 
-                    {event.pricePerPhoto > 0 ? 'Berbayar - Gunakan Checkout' : 'Unduh'}
-                  </>
-                )}
               </button>
             </div>
           </div>

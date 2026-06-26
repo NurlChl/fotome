@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import { Order, OrderItem, ActivityLog } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) {
@@ -15,20 +15,33 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    if (role === 'admin' && !session.user.permissions?.managePayouts) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     await connectDB();
 
-    // 1. Fetch Purchases grouped by Order
-    const paidOrders = await Order.find({ status: 'paid' })
-      .populate({
-        path: 'userId',
-        select: 'name email',
-      })
-      .sort({ paidAt: -1 })
-      .lean();
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')));
+    const skip = (page - 1) * limit;
 
-    const paidOrdersTyped = paidOrders as unknown as Record<string, unknown>[];
-    const paidOrderIds = paidOrdersTyped.map((o) => o._id as string);
-    const orderMap = new Map(paidOrdersTyped.map((o) => [(o._id as string).toString(), o]));
+    // 1. Fetch Purchases grouped by Order
+    const [paidOrders, totalPaidOrders] = await Promise.all([
+      Order.find({ status: 'paid' })
+        .populate({
+          path: 'userId',
+          select: 'name email',
+        })
+        .sort({ paidAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Order.countDocuments({ status: 'paid' }),
+    ]);
+
+    const paidOrderIds = paidOrders.map((o) => o._id);
+    const orderMap = new Map(paidOrders.map((o) => [o._id.toString(), o]));
 
     const orderItems = await OrderItem.find({ orderId: { $in: paidOrderIds } })
       .populate({
@@ -66,10 +79,10 @@ export async function GET() {
         return {
           _id: orderIdStr,
           orderNumber: (order.orderNumber as string) || '-',
-          userId: order.userId as { _id: string; name: string; email: string } | null | undefined || null,
+          userId: (order.userId as any) || null,
           eventId: firstEvent || null,
           totalAmount: (order.totalAmount as number) || 0,
-          paidAt: (order.paidAt as string) || (order.updatedAt as string) || new Date(),
+          paidAt: (order.paidAt as Date) || (order.updatedAt as Date) || new Date(),
           photos,
           photoCount: photos.length,
         };
@@ -110,6 +123,13 @@ export async function GET() {
       success: true,
       purchases,
       downloads,
+      pagination: {
+        page,
+        limit,
+        total: totalPaidOrders,
+        totalPages: Math.ceil(totalPaidOrders / limit),
+        hasMore: skip + limit < totalPaidOrders,
+      },
     });
   } catch (error) {
     console.error('Error fetching admin transactions:', error);

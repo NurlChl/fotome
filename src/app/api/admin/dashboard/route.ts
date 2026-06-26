@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import { User, Event, Photo, Order, OrderItem, Payout } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
@@ -6,22 +6,33 @@ import { auth } from '@/lib/auth';
 /**
  * GET /api/admin/dashboard - Fetch admin dashboard stats and pending payouts
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user || (session.user.role !== 'admin' && session.user.role !== 'superadmin')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // If role is admin, ensure they have at least one valid permission
-    if (session.user.role === 'admin') {
-      const p = session.user.permissions;
-      if (!p || (!p.manageUsers && !p.manageEvents && !p.managePayouts)) {
-        return NextResponse.json({ error: 'Forbidden: No admin permissions assigned' }, { status: 403 });
-      }
+    const isSuperadmin = session.user.role === 'superadmin';
+    const p = session.user.permissions;
+    const canManageUsers = isSuperadmin || !!p?.manageUsers;
+    const canManageEvents = isSuperadmin || !!p?.manageEvents;
+    const canManagePayouts = isSuperadmin || !!p?.managePayouts;
+
+    if (!canManageUsers && !canManageEvents && !canManagePayouts) {
+      return NextResponse.json({ error: 'Forbidden: No admin permissions assigned' }, { status: 403 });
     }
 
     await connectDB();
+
+    const { searchParams } = new URL(req.url);
+    const usersPage = Math.max(1, parseInt(searchParams.get('usersPage') || '1'));
+    const usersLimit = Math.min(100, Math.max(1, parseInt(searchParams.get('usersLimit') || '50')));
+    const eventsPage = Math.max(1, parseInt(searchParams.get('eventsPage') || '1'));
+    const eventsLimit = Math.min(100, Math.max(1, parseInt(searchParams.get('eventsLimit') || '50')));
+
+    const usersSkip = (usersPage - 1) * usersLimit;
+    const eventsSkip = (eventsPage - 1) * eventsLimit;
 
     // 1. Core platform metrics
     const [totalUsers, totalPhotographers, totalEvents, totalPhotos] = await Promise.all([
@@ -32,57 +43,86 @@ export async function GET() {
     ]);
 
     // 2. Platform revenue (platform fees from paid orders)
-    const paidOrders = await Order.find({ status: 'paid' }).distinct('_id');
-    const revenueStats = await OrderItem.aggregate([
-      {
-        $match: {
-          orderId: { $in: paidOrders },
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          totalSales: { $sum: '$price' },
-          platformFees: { $sum: '$platformFee' },
-        },
-      },
-    ]);
-
-    const grossSales = revenueStats[0]?.totalSales || 0;
-    const platformRevenue = revenueStats[0]?.platformFees || 0;
+    const revenuePromise = canManagePayouts
+      ? (async () => {
+          const paidOrders = await Order.find({ status: 'paid' }).distinct('_id');
+          const revenueStats = await OrderItem.aggregate([
+            {
+              $match: {
+                orderId: { $in: paidOrders },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalSales: { $sum: '$price' },
+                platformFees: { $sum: '$platformFee' },
+              },
+            },
+          ]);
+          return {
+            grossSales: revenueStats[0]?.totalSales || 0,
+            platformRevenue: revenueStats[0]?.platformFees || 0,
+          };
+        })()
+      : Promise.resolve({ grossSales: 0, platformRevenue: 0 });
 
     // 3. Payout status
-    const payoutStats = await Payout.aggregate([
-      {
-        $group: {
-          _id: '$status',
-          total: { $sum: '$amount' },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    const payoutStatsPromise = canManagePayouts
+      ? Payout.aggregate([
+          {
+            $group: {
+              _id: '$status',
+              total: { $sum: '$amount' },
+              count: { $sum: 1 },
+            },
+          },
+        ])
+      : Promise.resolve([]);
 
-    const pendingPayouts = payoutStats.find((p) => p._id === 'pending')?.total || 0;
-    const completedPayouts = payoutStats.find((p) => p._id === 'completed')?.total || 0;
+    const usersPromise = canManageUsers
+      ? User.find({})
+          .select('-passwordHash')
+          .sort({ createdAt: -1 })
+          .skip(usersSkip)
+          .limit(usersLimit)
+          .lean()
+      : Promise.resolve([]);
 
-    // 4. Fetch list of recent users
-    const users = await User.find({})
-      .select('-passwordHash')
-      .sort({ createdAt: -1 })
-      .limit(50) // limit to 50 for admin users list
-      .lean();
+    const usersTotalPromise = canManageUsers ? User.countDocuments({}) : Promise.resolve(0);
 
-    // 5. Fetch pending payouts to display
-    const payouts = await Payout.find({ status: 'pending' })
-      .populate('photographerId', 'name email')
-      .sort({ requestedAt: -1 })
-      .lean();
+    const payoutsPromise = canManagePayouts
+      ? Payout.find({ status: 'pending' })
+          .populate('photographerId', 'name email')
+          .sort({ requestedAt: -1 })
+          .limit(100)
+          .lean()
+      : Promise.resolve([]);
 
-    // 6. Fetch all events for events tab
-    const events = await Event.find({})
-      .populate('photographerId', 'name email')
-      .sort({ createdAt: -1 })
-      .lean();
+    const eventsPromise = canManageEvents
+      ? Event.find({})
+          .populate('photographerId', 'name email')
+          .sort({ createdAt: -1 })
+          .skip(eventsSkip)
+          .limit(eventsLimit)
+          .lean()
+      : Promise.resolve([]);
+
+    const eventsTotalPromise = canManageEvents ? Event.countDocuments({}) : Promise.resolve(0);
+
+    const [{ grossSales, platformRevenue }, payoutStats, users, usersTotal, payouts, events, eventsTotal] =
+      await Promise.all([
+        revenuePromise,
+        payoutStatsPromise,
+        usersPromise,
+        usersTotalPromise,
+        payoutsPromise,
+        eventsPromise,
+        eventsTotalPromise,
+      ]);
+
+    const pendingPayouts = (payoutStats as { _id: string; total: number }[]).find((p) => p._id === 'pending')?.total || 0;
+    const completedPayouts = (payoutStats as { _id: string; total: number }[]).find((p) => p._id === 'completed')?.total || 0;
 
     return NextResponse.json({
       stats: {
@@ -98,6 +138,22 @@ export async function GET() {
       users,
       payouts,
       events,
+      pagination: {
+        users: {
+          page: usersPage,
+          limit: usersLimit,
+          total: usersTotal,
+          totalPages: usersLimit > 0 ? Math.ceil(usersTotal / usersLimit) : 0,
+          hasMore: usersSkip + usersLimit < usersTotal,
+        },
+        events: {
+          page: eventsPage,
+          limit: eventsLimit,
+          total: eventsTotal,
+          totalPages: eventsLimit > 0 ? Math.ceil(eventsTotal / eventsLimit) : 0,
+          hasMore: eventsSkip + eventsLimit < eventsTotal,
+        },
+      },
     });
   } catch (error) {
     console.error('Error fetching admin dashboard:', error);

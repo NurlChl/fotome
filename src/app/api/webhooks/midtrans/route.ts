@@ -79,13 +79,19 @@ export async function POST(req: NextRequest) {
       // Payment successful!
       updateData.status = 'paid';
       updateData.paidAt = settlementTime || transactionTime || new Date();
-      
+
       console.log('Payment completed for order:', orderNumber);
     } else if (paymentStatus === 'failed' || paymentStatus === 'cancelled') {
       // Payment failed or cancelled
       updateData.status = 'cancelled';
-      
+
       console.log('Payment failed/cancelled for order:', orderNumber);
+    } else if (transactionStatus === 'expire') {
+      // Payment expired
+      updateData.status = 'cancelled';
+      updateData.paymentStatus = 'failed';
+
+      console.log('Payment expired for order:', orderNumber);
     }
 
     await Order.findByIdAndUpdate(order._id, updateData);
