@@ -1,9 +1,45 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import { ActivityLog, User, Photo } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 
-export async function GET(req: NextRequest) {
+interface SimpleUser {
+  _id: { toString(): string };
+  name: string;
+  email: string;
+}
+
+interface SimplePhoto {
+  _id: { toString(): string };
+  thumbnailUrl: string;
+  watermarkedUrl: string;
+}
+
+interface ActivityLogItem {
+  _id: string;
+  userId: string | null;
+  photoId: string | { _id: string; thumbnailUrl: string; watermarkedUrl: string } | null;
+  eventId: string | null;
+  action: string;
+  details: unknown;
+  ipAddress: string | null;
+  createdAt: Date | string | number;
+}
+
+interface AxiomRow {
+  id?: string;
+  _id?: string;
+  userId?: string;
+  photoId?: string;
+  eventId?: string;
+  action: string;
+  details?: unknown;
+  ipAddress?: string | null;
+  _time?: string;
+  createdAt?: string;
+}
+
+export async function GET() {
   try {
     const session = await auth();
     if (!session?.user) {
@@ -21,7 +57,7 @@ export async function GET(req: NextRequest) {
     const axiomToken = process.env.AXIOM_TOKEN;
     const axiomDataset = process.env.AXIOM_DATASET;
 
-    let logs: any[] = [];
+    let logs: ActivityLogItem[] = [];
     let source = 'mongodb';
 
     if (axiomToken && axiomDataset) {
@@ -41,33 +77,33 @@ export async function GET(req: NextRequest) {
           const data = await response.json();
           // Axiom tabular format returns rows inside `matches` or `tables[0].rows`
           // Let's normalize it
-          let rawRows: any[] = [];
+          let rawRows: AxiomRow[] = [];
           if (data.matches) {
             rawRows = data.matches;
           } else if (data.tables && data.tables[0] && data.tables[0].rows) {
             // Tabular rows mapping
-            const columns = data.tables[0].columns.map((c: any) => c.name);
-            rawRows = data.tables[0].rows.map((row: any) => {
-              const obj: any = {};
+            const columns = data.tables[0].columns.map((c: { name: string }) => c.name);
+            rawRows = data.tables[0].rows.map((row: unknown[]) => {
+              const obj: Record<string, unknown> = {};
               columns.forEach((col: string, idx: number) => {
                 obj[col] = row[idx];
               });
-              return obj;
+              return obj as unknown as AxiomRow;
             });
           } else if (data.events) {
             rawRows = data.events;
           }
 
           if (rawRows.length > 0) {
-            logs = rawRows.map((r: any) => ({
+            logs = rawRows.map((r: AxiomRow) => ({
               _id: r.id || r._id || Math.random().toString(),
-              userId: r.userId === 'anonymous' ? null : r.userId,
+              userId: r.userId === 'anonymous' ? null : r.userId || null,
               photoId: r.photoId || null,
               eventId: r.eventId || null,
               action: r.action,
               details: r.details,
-              ipAddress: r.ipAddress,
-              createdAt: r._time || r.createdAt,
+              ipAddress: r.ipAddress || null,
+              createdAt: r._time || r.createdAt || new Date().toISOString(),
             }));
             source = 'axiom';
           }
@@ -90,7 +126,16 @@ export async function GET(req: NextRequest) {
         .limit(200)
         .lean();
       
-      logs = dbLogs.map((l: any) => ({
+      logs = (dbLogs as unknown as {
+        _id: { toString(): string };
+        userId?: { toString(): string } | null;
+        photoId?: { _id: { toString(): string }; thumbnailUrl: string; watermarkedUrl: string } | null;
+        eventId?: { toString(): string } | null;
+        action: string;
+        details: unknown;
+        ipAddress?: string | null;
+        createdAt: Date;
+      }[]).map((l) => ({
         _id: l._id.toString(),
         userId: l.userId ? l.userId.toString() : null,
         photoId: l.photoId ? {
@@ -101,23 +146,27 @@ export async function GET(req: NextRequest) {
         eventId: l.eventId ? l.eventId.toString() : null,
         action: l.action,
         details: l.details,
-        ipAddress: l.ipAddress,
+        ipAddress: l.ipAddress || null,
         createdAt: l.createdAt,
       }));
       source = 'mongodb';
     }
 
     // Populate user emails/names and photo details
-    const userIds = Array.from(new Set(logs.map(l => l.userId).filter(Boolean)));
-    const photoIds = Array.from(new Set(logs.map(l => typeof l.photoId === 'string' ? l.photoId : l.photoId?._id).filter(Boolean)));
+    const userIds = Array.from(new Set(logs.map(l => l.userId).filter((id): id is string => !!id)));
+    const photoIds = Array.from(new Set(logs.map(l => typeof l.photoId === 'string' ? l.photoId : l.photoId?._id).filter((id): id is string => !!id)));
 
     const [users, photos] = await Promise.all([
       User.find({ _id: { $in: userIds } }).select('name email').lean(),
       Photo.find({ _id: { $in: photoIds } }).select('thumbnailUrl watermarkedUrl').lean()
     ]);
 
-    const userMap = new Map(users.map((u: any) => [u._id.toString(), u]));
-    const photoMap = new Map(photos.map((p: any) => [p._id.toString(), p]));
+    const userMap = new Map<string, SimpleUser>(
+      (users as unknown as SimpleUser[]).map((u) => [u._id.toString(), u])
+    );
+    const photoMap = new Map<string, SimplePhoto>(
+      (photos as unknown as SimplePhoto[]).map((p) => [p._id.toString(), p])
+    );
 
     const populatedLogs = logs.map(log => {
       const u = log.userId ? userMap.get(log.userId) : null;
@@ -128,7 +177,7 @@ export async function GET(req: NextRequest) {
           pObj = log.photoId;
         } else {
           const photoIdStr = log.photoId.toString();
-          const dbPhoto: any = photoMap.get(photoIdStr);
+          const dbPhoto = photoMap.get(photoIdStr);
           if (dbPhoto) {
             pObj = {
               _id: dbPhoto._id.toString(),

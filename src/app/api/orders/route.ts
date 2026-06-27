@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
-import { Order, OrderItem, Photo, Event, User, FaceDescriptor, Voucher, VoucherUsage } from '@/lib/db/models';
+import { Order, OrderItem, Photo, Event, Voucher, VoucherUsage, IOrder } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 import { createOrderSchema } from '@/lib/validation';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { getUserHardNegatives, isHardNegativeMatch, euclideanDistance, saveClaimedPhotoAndLearn } from '@/lib/biometrics';
 import { createSnapToken } from '@/lib/midtrans';
 
 /**
@@ -115,7 +114,7 @@ export async function POST(req: NextRequest) {
       
       // Check allowed users
       if (voucher.allowedUserIds && voucher.allowedUserIds.length > 0) {
-        const isAllowed = voucher.allowedUserIds.some((id: any) => id.toString() === session.user.id);
+        const isAllowed = voucher.allowedUserIds.some((id: { toString(): string }) => id.toString() === session.user.id);
         if (!isAllowed) {
           return NextResponse.json({ error: 'Voucher not applicable for your account' }, { status: 400 });
         }
@@ -238,7 +237,7 @@ export async function POST(req: NextRequest) {
       discountAmount,
       voucherId: voucher ? voucher._id : undefined,
       status: 'pending',
-    }) as any;
+    }) as unknown as IOrder;
 
     // Create order items (use adjusted per-item price based on discount)
     const orderItems = newPhotos.map((photo) => {

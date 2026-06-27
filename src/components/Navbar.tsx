@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
-import { Camera, ChevronDown, LogOut, Settings, Image as ImageIcon, ClipboardList, Menu, X, ShieldAlert, Sun, Moon, UserCheck } from 'lucide-react';
+import { Camera, ChevronDown, LogOut, Settings, Image as ImageIcon, ClipboardList, Menu, X, Sun, Moon, UserCheck } from 'lucide-react';
 
 interface DbUser {
   faceDescriptor?: number[];
@@ -69,11 +69,7 @@ export default function Navbar() {
     }
   };
 
-  const hasAdminAccess = session?.user?.role === 'admin' || session?.user?.role === 'superadmin';
-  const hasEventUploaderAccess = session && (
-    session.user.role === 'superadmin' || 
-    (session.user.role === 'admin' && session.user.permissions?.manageEvents)
-  );
+
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-100 transition-all duration-150 ${

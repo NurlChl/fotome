@@ -160,7 +160,6 @@ export default function AdminDashboard() {
   const canManageUsers = isSuperadmin || !!session?.user?.permissions?.manageUsers;
   const canManageEvents = isSuperadmin || !!session?.user?.permissions?.manageEvents;
   const canManagePayouts = isSuperadmin || !!session?.user?.permissions?.managePayouts;
-  const canManageLogs = isSuperadmin || !!session?.user?.permissions?.manageLogs;
 
   useEffect(() => {
     if (status === 'unauthenticated') {

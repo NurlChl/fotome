@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, Suspense, useRef, useMemo } from 'react';
+import { useState, useEffect, Suspense, useRef, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Camera, Download, Loader2, CheckCircle2, X, ChevronDown, ChevronLeft, ChevronRight, Search as SearchIcon } from 'lucide-react';
+import { Camera, Download, Loader2, X, ChevronDown, ChevronLeft, ChevronRight, Search as SearchIcon } from 'lucide-react';
 
 interface PurchasedPhoto {
   _id: string;
@@ -46,7 +46,6 @@ interface EventOption {
 function MyPhotos() {
   const { status } = useSession();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [photos, setPhotos] = useState<PurchasedPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -166,23 +165,23 @@ function MyPhotos() {
     setPreviewIndex(index);
   };
 
-  const handlePrevPhoto = (e?: React.MouseEvent) => {
+  const handlePrevPhoto = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (previewIndex > 0) {
       const newIndex = previewIndex - 1;
       setPreviewIndex(newIndex);
       setPreviewPhoto(filteredPhotos[newIndex]);
     }
-  };
+  }, [previewIndex, filteredPhotos]);
 
-  const handleNextPhoto = (e?: React.MouseEvent) => {
+  const handleNextPhoto = useCallback((e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (previewIndex < filteredPhotos.length - 1) {
       const newIndex = previewIndex + 1;
       setPreviewIndex(newIndex);
       setPreviewPhoto(filteredPhotos[newIndex]);
     }
-  };
+  }, [previewIndex, filteredPhotos]);
 
   const selectedEventTitle = useMemo(() => {
     return eventOptions.find((e) => e.slug === selectedEventSlug)?.title || 'Semua Event';
@@ -217,7 +216,7 @@ function MyPhotos() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewPhoto, previewIndex, filteredPhotos]);
+  }, [previewPhoto, previewIndex, filteredPhotos, handlePrevPhoto, handleNextPhoto]);
 
   // Touch/swipe navigation for preview modal
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -258,7 +257,7 @@ function MyPhotos() {
 
   if (status === 'loading' || isLoading) {
     return (
-      <div className="pt-28 min-h-screen pb-24 bg-neutral-950 dark:bg-neutral-950 bg-white flex flex-col items-center justify-center gap-4">
+      <div className="pt-28 min-h-screen pb-24 bg-white dark:bg-neutral-950 flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 text-primary-500 animate-spin" />
         <p className="text-neutral-600 dark:text-neutral-400 text-sm">Loading your photos...</p>
       </div>
@@ -266,7 +265,7 @@ function MyPhotos() {
   }
 
   return (
-    <div className="pt-28 min-h-screen pb-24 bg-neutral-950 dark:bg-neutral-950 bg-white text-neutral-900 dark:text-neutral-100">
+    <div className="pt-28 min-h-screen pb-24 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
       <div className="container mx-auto px-6 max-w-7xl">
         <div className="relative border-b border-neutral-200 dark:border-neutral-900 py-16 mb-12 overflow-hidden -mt-28 pt-36">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl aspect-video bg-primary-500/10 rounded-full blur-[120px] pointer-events-none z-0" />
@@ -290,15 +289,15 @@ function MyPhotos() {
               <button
                 type="button"
                 onClick={() => setIsEventDropdownOpen((v) => !v)}
-                className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-neutral-900/50 dark:bg-neutral-900/50 bg-neutral-100 border border-neutral-800 dark:border-neutral-800 border-neutral-300 rounded-xl text-sm text-neutral-100 dark:text-neutral-100 text-neutral-900 hover:border-neutral-700 dark:hover:border-neutral-700 hover:border-neutral-400 transition"
+                className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-900/50 border border-neutral-300 dark:border-neutral-800 rounded-xl text-sm text-neutral-900 dark:text-neutral-100 hover:border-neutral-400 dark:hover:border-neutral-700 transition"
               >
                 <span className="truncate">{selectedEventTitle}</span>
                 <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform ${isEventDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {isEventDropdownOpen && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-neutral-900 dark:bg-neutral-900 bg-white border border-neutral-800 dark:border-neutral-800 border-neutral-200 rounded-xl shadow-xl z-30 overflow-hidden">
-                  <div className="p-2 border-b border-neutral-800 dark:border-neutral-800 border-neutral-200">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl z-30 overflow-hidden">
+                  <div className="p-2 border-b border-neutral-200 dark:border-neutral-800">
                     <div className="relative">
                       <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
                       <input
@@ -306,7 +305,7 @@ function MyPhotos() {
                         value={eventSearch}
                         onChange={(e) => setEventSearch(e.target.value)}
                         placeholder="Cari event..."
-                        className="w-full pl-9 pr-3 py-2 bg-neutral-950 dark:bg-neutral-950 bg-neutral-100 rounded-lg text-sm text-neutral-100 dark:text-neutral-100 text-neutral-900 placeholder:text-neutral-600 dark:placeholder:text-neutral-600 placeholder:text-neutral-400"
+                        className="w-full pl-9 pr-3 py-2 bg-neutral-100 dark:bg-neutral-950 rounded-lg text-sm text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400 dark:placeholder:text-neutral-600"
                         autoFocus
                       />
                     </div>
@@ -322,15 +321,15 @@ function MyPhotos() {
                             setIsEventDropdownOpen(false);
                             setEventSearch('');
                           }}
-                          className={`w-full text-left px-4 py-2.5 text-sm transition hover:bg-neutral-800 dark:hover:bg-neutral-800 hover:bg-neutral-100 ${
-                            selectedEventSlug === evt.slug ? 'text-primary-400 bg-primary-500/5' : 'text-neutral-200 dark:text-neutral-200 text-neutral-900'
+                          className={`w-full text-left px-4 py-2.5 text-sm transition hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                            selectedEventSlug === evt.slug ? 'text-primary-400 bg-primary-500/5' : 'text-neutral-900 dark:text-neutral-200'
                           }`}
                         >
                           {evt.title}
                         </button>
                       ))
                     ) : (
-                      <div className="px-4 py-3 text-xs text-neutral-500 dark:text-neutral-500 text-neutral-600">Tidak ada event ditemukan</div>
+                      <div className="px-4 py-3 text-xs text-neutral-600 dark:text-neutral-500">Tidak ada event ditemukan</div>
                     )}
                   </div>
                 </div>
@@ -379,8 +378,8 @@ function MyPhotos() {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-24 text-center border border-neutral-900 dark:border-neutral-900 border-neutral-200 border-dashed rounded-3xl bg-neutral-900/10 dark:bg-neutral-900/10 bg-neutral-50">
-            <div className="mb-4 p-4 rounded-full bg-neutral-900/50 dark:bg-neutral-900/50 bg-neutral-200 border border-neutral-800 dark:border-neutral-800 border-neutral-300 inline-flex text-neutral-500">
+          <div className="flex flex-col items-center justify-center py-24 text-center border border-neutral-200 dark:border-neutral-900 border-dashed rounded-3xl bg-neutral-50 dark:bg-neutral-900/10">
+            <div className="mb-4 p-4 rounded-full bg-neutral-200 dark:bg-neutral-900/50 border border-neutral-300 dark:border-neutral-800 inline-flex text-neutral-500">
               <Camera className="w-8 h-8" />
             </div>
             <h2 className="text-lg font-bold text-neutral-900 dark:text-neutral-50 mb-2">{photos.length > 0 ? 'No photos in selected event' : 'No photos found'}</h2>
@@ -474,7 +473,7 @@ function MyPhotos() {
 export default function MyPhotosPage() {
   return (
     <Suspense fallback={
-      <div className="pt-28 min-h-screen pb-24 bg-neutral-950 dark:bg-neutral-950 bg-white flex flex-col items-center justify-center gap-4">
+      <div className="pt-28 min-h-screen pb-24 bg-white dark:bg-neutral-950 flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 text-primary-500 animate-spin" />
         <p className="text-neutral-600 dark:text-neutral-400 text-sm">Loading your gallery...</p>
       </div>

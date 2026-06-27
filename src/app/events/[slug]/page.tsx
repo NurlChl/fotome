@@ -126,7 +126,6 @@ export default function EventPage() {
   const [flagConfirmPhotoId, setFlagConfirmPhotoId] = useState<string | null>(null);
   const [flagSuccessMessage, setFlagSuccessMessage] = useState<string | null>(null);
   const [flagErrorMessage, setFlagErrorMessage] = useState<string | null>(null);
-  const [isDownloadingSingle, setIsDownloadingSingle] = useState(false);
   const [bulkDownloadProgress, setBulkDownloadProgress] = useState<{ current: number; total: number; status: string } | null>(null);
 
   const [activeTab, setActiveTab] = useState<'search' | 'all'>('search');
@@ -346,9 +345,9 @@ export default function EventPage() {
           // Extract photoIds for Set
           const photoIds = new Set<string>(
             data.claimedPhotos
-              .map((cp: any) => {
-                const id = cp.photoId?._id || cp.photoId;
-                return typeof id === 'string' ? id : id?.toString();
+              .map((cp: { photoId: PhotoData | string }) => {
+                const id = typeof cp.photoId === 'object' && cp.photoId !== null ? cp.photoId._id : cp.photoId;
+                return id;
               })
               .filter((id: string | undefined): id is string => !!id)
           );
@@ -356,8 +355,8 @@ export default function EventPage() {
           
           // Store full photo objects for filter display
           const photoObjects = data.claimedPhotos
-            .map((cp: any) => cp.photoId)
-            .filter((p: any) => p && p._id) as PhotoData[];
+            .map((cp: { photoId: PhotoData | string }) => cp.photoId)
+            .filter((p: PhotoData | string): p is PhotoData => typeof p === 'object' && p !== null && '_id' in p);
           setClaimedPhotoObjects(photoObjects);
           
           console.log(`Loaded ${photoIds.size} claimed photos for this event`);
@@ -382,10 +381,10 @@ export default function EventPage() {
           // Extract photoIds for Set (excluding claimed photos to avoid double counting)
           const photoIds = new Set<string>(
             data.savedPhotos
-              .filter((sp: any) => sp.type === 'saved') // Only pure saved photos (not claimed)
-              .map((sp: any) => {
-                const id = sp.photoId?._id || sp.photoId;
-                return typeof id === 'string' ? id : id?.toString();
+              .filter((sp: { type: string; photoId: PhotoData | string }) => sp.type === 'saved') // Only pure saved photos (not claimed)
+              .map((sp: { type: string; photoId: PhotoData | string }) => {
+                const id = typeof sp.photoId === 'object' && sp.photoId !== null ? sp.photoId._id : sp.photoId;
+                return id;
               })
               .filter((id: string | undefined): id is string => !!id)
           );
@@ -393,9 +392,9 @@ export default function EventPage() {
           
           // Store full photo objects for filter display (only pure saved, not claimed)
           const photoObjects = data.savedPhotos
-            .filter((sp: any) => sp.type === 'saved')
-            .map((sp: any) => sp.photoId)
-            .filter((p: any) => p && p._id) as PhotoData[];
+            .filter((sp: { type: string; photoId: PhotoData | string }) => sp.type === 'saved')
+            .map((sp: { type: string; photoId: PhotoData | string }) => sp.photoId)
+            .filter((p: PhotoData | string): p is PhotoData => typeof p === 'object' && p !== null && '_id' in p);
           setSavedPhotoObjects(photoObjects);
           
           console.log(`Loaded ${photoIds.size} saved photos for this event`);
@@ -798,9 +797,9 @@ export default function EventPage() {
             const refetchData = await refetchRes.json();
             const photoIds = new Set<string>(
               refetchData.claimedPhotos
-                .map((cp: any) => {
-                  const id = cp.photoId?._id || cp.photoId;
-                  return typeof id === 'string' ? id : id?.toString();
+                .map((cp: { photoId: PhotoData | string }) => {
+                  const id = typeof cp.photoId === 'object' && cp.photoId !== null ? cp.photoId._id : cp.photoId;
+                  return id;
                 })
                 .filter((id: string | undefined): id is string => !!id)
             );
@@ -808,8 +807,8 @@ export default function EventPage() {
             
             // Store full photo objects
             const photoObjects = refetchData.claimedPhotos
-              .map((cp: any) => cp.photoId)
-              .filter((p: any) => p && p._id) as PhotoData[];
+              .map((cp: { photoId: PhotoData | string }) => cp.photoId)
+              .filter((p: PhotoData | string): p is PhotoData => typeof p === 'object' && p !== null && '_id' in p);
             setClaimedPhotoObjects(photoObjects);
             
             console.log('Claimed photos re-fetched after manual claim:', photoIds.size);
@@ -1088,8 +1087,22 @@ export default function EventPage() {
 
       // 3. If paid event, open Midtrans Snap
       if (orderData.order.snapToken) {
+        interface MidtransSnap {
+          pay: (
+            token: string,
+            options: {
+              onSuccess?: (result: unknown) => void;
+              onPending?: (result: unknown) => void;
+              onError?: (result: unknown) => void;
+              onClose?: () => void;
+            }
+          ) => void;
+        }
+
+        const win = window as unknown as { snap?: MidtransSnap };
+
         // Load Midtrans Snap.js if not already loaded
-        if (!(window as any).snap) {
+        if (!win.snap) {
           const script = document.createElement('script');
           script.src = `https://app.${
             process.env.MIDTRANS_IS_PRODUCTION === 'true' ? '' : 'sandbox.'
@@ -1102,17 +1115,19 @@ export default function EventPage() {
           });
         }
 
+        const updatedWin = window as unknown as { snap: MidtransSnap };
+
         // Open Midtrans Snap payment modal
-        (window as any).snap.pay(orderData.order.snapToken, {
-          onSuccess: function (result: any) {
+        updatedWin.snap.pay(orderData.order.snapToken, {
+          onSuccess: function (result) {
             console.log('Payment success:', result);
             router.push('/orders?success=true');
           },
-          onPending: function (result: any) {
+          onPending: function (result) {
             console.log('Payment pending:', result);
             router.push('/orders?pending=true');
           },
-          onError: function (result: any) {
+          onError: function (result) {
             console.log('Payment error:', result);
             setCheckoutError('Pembayaran gagal. Silakan coba lagi.');
             setIsProcessingPayment(false);
@@ -1132,70 +1147,7 @@ export default function EventPage() {
     }
   };
 
-  const [isDownloadingFree, setIsDownloadingFree] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState('');
-
-  const handleFreeDownload = async () => {
-    if (!session) {
-      router.push(`/login?callbackUrl=/events/${slug}`);
-      return;
-    }
-
-    setIsDownloadingFree(true);
-    const photoIds = Array.from(selectedPhotos);
-    setBulkDownloadProgress({ current: 0, total: photoIds.length, status: 'Membuat order...' });
-
-    try {
-      // Step 1: Create Order (even for free downloads)
-      const orderRes = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          photoIds,
-          eventId: event?._id,
-        }),
-      });
-
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) {
-        throw new Error(orderData.error || 'Failed to create order');
-      }
-
-      console.log('Order created:', orderData.order);
-
-      // Step 2: If free (price = 0), auto-complete payment
-      if (orderData.order.totalAmount === 0) {
-        const payRes = await fetch('/api/orders/mock-pay', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: orderData.order.id,
-          }),
-        });
-
-        const payData = await payRes.json();
-        if (!payRes.ok) {
-          throw new Error(payData.error || 'Payment processing failed');
-        }
-
-        console.log('Payment completed:', payData);
-      }
-
-      // Step 3: Redirect to My Gallery for download
-      setSelectedPhotos(new Set()); // Reset selection
-      setBulkDownloadProgress(null);
-      setIsDownloadingFree(false);
-      
-      // Redirect to My Gallery with success message
-      router.push('/my-photos?success=true');
-    } catch (error) {
-      console.error('Free download error:', error);
-      setErrorPopupMessage(error instanceof Error ? error.message : 'Pengunduhan gagal. Silakan coba lagi.');
-      setBulkDownloadProgress(null);
-    } finally {
-      setIsDownloadingFree(false);
-    }
-  };
+  const isDownloadingFree = false;
 
   const getPreviewList = useCallback((): PhotoResult[] => {
     if (activeTab === 'all') {
@@ -1900,7 +1852,6 @@ export default function EventPage() {
           <div className="space-y-6 animate-fadeIn">
             {(() => {
               const displayPhotos = getDisplayPhotos();
-              const savedCount = claimedPhotos.size + savedPhotos.size;
               
               if (displayPhotos.length === 0 && allPhotosFilter === 'saved') {
                 return (
@@ -2838,7 +2789,7 @@ export default function EventPage() {
               {/* Progress Bar */}
               <div className="w-full bg-neutral-950 rounded-full h-3 overflow-hidden border border-neutral-850">
                 <div 
-                  className="h-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-500 ease-out flex items-center justify-end pr-1"
+                  className="h-full bg-linear-to-r from-primary-500 to-primary-400 transition-all duration-500 ease-out flex items-center justify-end pr-1"
                   style={{ width: `${(bulkDownloadProgress.current / bulkDownloadProgress.total) * 100}%` }}
                 >
                   {bulkDownloadProgress.current > 0 && (

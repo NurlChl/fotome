@@ -85,16 +85,40 @@ function OrdersContent() {
 
   useEffect(() => {
     const success = searchParams.get('success') === 'true';
+    const pending = searchParams.get('pending') === 'true';
+    const error = searchParams.get('error') === 'true';
 
-    const timer = setTimeout(() => {
-      if (success) {
-        // Redirect to My Photos on successful payment
+    if (success) {
+      const stateTimer = setTimeout(() => {
+        setNotification({
+          type: 'success',
+          message: 'Pembayaran berhasil! Silakan periksa galeri Anda untuk mengunduh foto.'
+        });
+      }, 0);
+      const redirectTimer = setTimeout(() => {
         router.push('/my-photos');
-        return;
-      }
-    }, 0);
-
-    return () => clearTimeout(timer);
+      }, 3000);
+      return () => {
+        clearTimeout(stateTimer);
+        clearTimeout(redirectTimer);
+      };
+    } else if (pending) {
+      const timer = setTimeout(() => {
+        setNotification({
+          type: 'pending',
+          message: 'Pembayaran Anda sedang diproses. Silakan hubungi kami jika status tidak berubah.'
+        });
+      }, 0);
+      return () => clearTimeout(timer);
+    } else if (error) {
+      const timer = setTimeout(() => {
+        setNotification({
+          type: 'error',
+          message: 'Pembayaran gagal atau dibatalkan. Silakan coba lagi.'
+        });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
   }, [searchParams, router]);
 
 

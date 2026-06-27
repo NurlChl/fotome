@@ -207,7 +207,10 @@ export default function ManageEventPage() {
   }, [slug]);
 
   useEffect(() => {
-    fetchVouchers();
+    const timer = setTimeout(() => {
+      fetchVouchers();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [fetchVouchers]);
 
   // Search users
@@ -726,7 +729,7 @@ export default function ManageEventPage() {
     setIsSavingDetails(true);
     setPublishError('');
     try {
-      const updateData: any = {
+      const updateData = {
         title: editTitle,
         pricePerPhoto: Number(editPricePerPhoto),
         eventDate: editEventDate,
@@ -928,7 +931,7 @@ export default function ManageEventPage() {
               Event Details
             </h3>
             <p className="text-xs text-neutral-500 mt-1 font-light">
-              Edit your event's title and pricing.
+              Edit your event&apos;s title and pricing.
             </p>
           </div>
           {!isEditingDetails ? (

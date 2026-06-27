@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
@@ -146,20 +146,20 @@ export default function TransactionsPage() {
     setPreviewIndex(0);
   };
 
-  const closeOrderPreview = () => {
+  const closeOrderPreview = useCallback(() => {
     setPreviewOrder(null);
     setPreviewIndex(0);
-  };
+  }, []);
 
-  const goToPrev = () => {
+  const goToPrev = useCallback(() => {
     if (!previewOrder) return;
     setPreviewIndex((prev) => (prev > 0 ? prev - 1 : previewOrder.photos.length - 1));
-  };
+  }, [previewOrder]);
 
-  const goToNext = () => {
+  const goToNext = useCallback(() => {
     if (!previewOrder) return;
     setPreviewIndex((prev) => (prev < previewOrder.photos.length - 1 ? prev + 1 : 0));
-  };
+  }, [previewOrder]);
 
   // Keyboard navigation for order preview modal
   useEffect(() => {
@@ -177,7 +177,7 @@ export default function TransactionsPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [previewOrder]);
+  }, [previewOrder, goToPrev, goToNext, closeOrderPreview]);
 
   // Touch/swipe navigation for order preview modal
   const handleTouchStart = (e: React.TouchEvent) => {

@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
-import { Activity, ShieldAlert, CheckCircle2, ArrowLeft, Loader2, Database, Cloud, Eye, X } from 'lucide-react';
-import Link from 'next/link';
+import { Activity, Database, Cloud, Eye, X } from 'lucide-react';
 
 interface LogEntry {
   _id: string;
@@ -65,7 +64,10 @@ export default function ActivityLogsPage() {
     }
 
     if (canManageLogs) {
-      fetchLogs();
+      const timer = setTimeout(() => {
+        fetchLogs();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [status, canManageLogs, router]);
 

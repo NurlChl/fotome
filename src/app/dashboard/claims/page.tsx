@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
-import { ShieldAlert, Users, Eye, X, Fingerprint, Info, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { ShieldAlert, Eye, X, Fingerprint, Info, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
 
 interface ClaimEntry {
   _id: string;

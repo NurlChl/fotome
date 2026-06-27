@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         return {
           _id: orderIdStr,
           orderNumber: (order.orderNumber as string) || '-',
-          userId: (order.userId as any) || null,
+          userId: (order.userId as unknown as { _id: string; name: string; email: string } | null) || null,
           eventId: firstEvent || null,
           totalAmount: (order.totalAmount as number) || 0,
           paidAt: (order.paidAt as Date) || (order.updatedAt as Date) || new Date(),

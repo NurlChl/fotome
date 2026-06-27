@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
 
     // Filter out flagged photo IDs
     if (flaggedPhotoIds.length > 0 && matchingFaces.length > 0) {
-      matchingFaces = matchingFaces.filter((r: any) => {
+      matchingFaces = matchingFaces.filter((r: FaceSearchResult) => {
         const photoIdStr = r.photo?._id?.toString() || r.photoId?.toString();
         return !flaggedPhotoIds.includes(photoIdStr);
       });

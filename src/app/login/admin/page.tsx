@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { signIn, signOut } from 'next-auth/react';
+import { signIn, signOut, getSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, Lock, Mail, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
@@ -29,8 +29,7 @@ function AdminLoginForm() {
         setError(result.error);
       } else {
         // Retrieve session to verify role
-        const sessionRes = await fetch('/api/auth/session');
-        const sessionData = await sessionRes.json();
+        const sessionData = await getSession();
         const role = sessionData?.user?.role;
 
         if (role === 'admin' || role === 'superadmin') {
