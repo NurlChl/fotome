@@ -20,7 +20,9 @@ function AdminLoginForm() {
       if (role === 'admin' || role === 'superadmin') {
         router.push('/dashboard/admin');
       } else {
-        setError('Akses Ditolak: Akun Anda saat ini tidak memiliki hak akses Administrator. Hubungi Superadmin atau pastikan akun Anda sudah dipromosikan di database.');
+        setTimeout(() => {
+          setError('Akses Ditolak: Akun Anda saat ini tidak memiliki hak akses Administrator. Hubungi Superadmin atau pastikan akun Anda sudah dipromosikan di database.');
+        }, 0);
       }
     }
   }, [status, session, router]);
