@@ -32,6 +32,10 @@ interface DohAnswer {
  * Dynamically resolves a mongodb+srv:// URI using DNS over HTTPS (DoH) to bypass local DNS resolution limitations.
  */
 async function resolveMongodbSrv(uri: string): Promise<string> {
+  if (process.env.VERCEL === 'true' || process.env.NODE_ENV === 'production') {
+    return uri;
+  }
+
   if (!uri.startsWith('mongodb+srv://')) {
     return uri;
   }

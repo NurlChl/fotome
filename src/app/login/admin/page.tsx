@@ -1,17 +1,27 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { signIn, signOut, getSession } from 'next-auth/react';
+import { useState, Suspense, useEffect } from 'react';
+import { signIn, signOut, getSession, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, Lock, Mail, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 
 function AdminLoginForm() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      const role = session?.user?.role;
+      if (role === 'admin' || role === 'superadmin') {
+        router.push('/dashboard/admin');
+      }
+    }
+  }, [status, session, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
