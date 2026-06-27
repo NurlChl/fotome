@@ -7,7 +7,7 @@ export default function EventDetailLoading() {
       <div className="relative border-b border-neutral-900 py-16 mb-12 overflow-hidden -mt-28 pt-36">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl aspect-video bg-primary-500/5 rounded-full blur-[100px] pointer-events-none z-0" />
         
-        <div className="container mx-auto px-6 max-w-7xl relative z-10 space-y-4">
+        <div className="container mx-auto px-6 max-w-7xl relative z-10 space-y-4"> 
           <div className="h-4 bg-neutral-900 border border-neutral-850 w-32 rounded-lg animate-pulse" />
           <div className="h-8 bg-neutral-900 border border-neutral-850 w-1/2 rounded-xl animate-pulse" />
           <div className="flex gap-4">
