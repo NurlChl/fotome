@@ -766,7 +766,7 @@ export default function ManageEventPage() {
   }
 
   return (
-    <div className="max-w-4xl bg-neutral-900/30 border border-neutral-900 p-8 rounded-3xl shadow-xl animate-fadeIn space-y-6">
+    <div className="max-w-4xl bg-neutral-900/30 border border-neutral-900 p-5 sm:p-8 rounded-3xl shadow-xl animate-fadeIn space-y-6">
       
       {/* Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-900 pb-5">
@@ -1176,7 +1176,7 @@ export default function ManageEventPage() {
                 />
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-neutral-300 mb-1 block">Discount Type *</label>
                   <select
@@ -1218,7 +1218,7 @@ export default function ManageEventPage() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-neutral-300 mb-1 block">
                     Min Photos to Purchase *

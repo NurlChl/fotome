@@ -138,7 +138,7 @@ export default function DashboardLayout({
             <div className="h-10 bg-neutral-800 rounded-xl" />
           </div>
         </aside>
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="animate-pulse space-y-6">
             <div className="h-8 bg-neutral-900 rounded w-1/3" />
             <div className="h-64 bg-neutral-900 rounded" />

@@ -70,7 +70,7 @@ export default function CreateEventPage() {
   };
 
   return (
-    <div className="max-w-2xl bg-neutral-900/30 border border-neutral-900 p-8 rounded-3xl shadow-xl animate-fadeIn space-y-6">
+    <div className="max-w-2xl bg-neutral-900/30 border border-neutral-900 p-5 sm:p-8 rounded-3xl shadow-xl animate-fadeIn space-y-6">
       
       {/* Back to list */}
       <button 
