@@ -303,6 +303,13 @@ export default function AdminDashboard() {
         setPermLogs(false);
         fetchAdminsList();
       } else {
+        if (data.error === 'Validation error' && data.details) {
+          const errors = data.details as Record<string, string[]>;
+          const msg = Object.entries(errors)
+            .map(([field, msgs]) => `${field}: ${msgs.join(', ')}`)
+            .join('; ');
+          throw new Error(`Validation Error - ${msg}`);
+        }
         throw new Error(data.error || 'Failed to create admin');
       }
     } catch (error) {
@@ -356,6 +363,13 @@ export default function AdminDashboard() {
         setEditingAdminId(null);
         fetchAdminsList();
       } else {
+        if (data.error === 'Validation error' && data.details) {
+          const errors = data.details as Record<string, string[]>;
+          const msg = Object.entries(errors)
+            .map(([field, msgs]) => `${field}: ${msgs.join(', ')}`)
+            .join('; ');
+          throw new Error(`Validation Error - ${msg}`);
+        }
         throw new Error(data.error || 'Failed to update admin');
       }
     } catch (error) {

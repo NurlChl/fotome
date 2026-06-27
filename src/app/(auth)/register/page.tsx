@@ -30,7 +30,18 @@ function RegisterForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Pendaftaran gagal.');
+        if (data.error === 'Validation error' && data.details) {
+          const errors = data.details as Record<string, string[]>;
+          const msg = Object.entries(errors)
+            .map(([field, msgs]) => {
+              const fieldName = field === 'name' ? 'Nama' : field === 'email' ? 'Email' : 'Password';
+              return `${fieldName}: ${msgs.join(', ')}`;
+            })
+            .join('; ');
+          setError(`Error Validasi - ${msg}`);
+        } else {
+          setError(data.error || 'Pendaftaran gagal.');
+        }
         return;
       }
 
