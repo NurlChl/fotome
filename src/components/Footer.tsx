@@ -29,25 +29,25 @@ export default function Footer() {
             <h4 className="text-neutral-50 text-xs font-bold uppercase tracking-wider">Platform</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href="/events" className="hover:text-neutral-50 transition duration-150">Explore Events</Link></li>
-              <li><Link href="/pricing" className="hover:text-neutral-50 transition duration-150">Pricing</Link></li>
+              <li><Link href="#" className="hover:text-neutral-50 transition duration-150">Pricing</Link></li>
             </ul>
           </div>
 
           <div className="space-y-4">
             <h4 className="text-neutral-50 text-xs font-bold uppercase tracking-wider">Support</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/help" className="hover:text-neutral-50 transition duration-150">Help Center</Link></li>
-              <li><Link href="/privacy" className="hover:text-neutral-50 transition duration-150">Privacy Policy</Link></li>
-              <li><Link href="/terms" className="hover:text-neutral-50 transition duration-150">Terms of Service</Link></li>
+              <li><Link href="#" className="hover:text-neutral-50 transition duration-150">Help Center</Link></li>
+              <li><Link href="#" className="hover:text-neutral-50 transition duration-150">Privacy Policy</Link></li>
+              <li><Link href="#" className="hover:text-neutral-50 transition duration-150">Terms of Service</Link></li>
             </ul>
           </div>
 
           <div className="space-y-4">
             <h4 className="text-neutral-50 text-xs font-bold uppercase tracking-wider">Company</h4>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/about" className="hover:text-neutral-50 transition duration-150">About Us</Link></li>
-              <li><Link href="/contact" className="hover:text-neutral-50 transition duration-150">Contact</Link></li>
-              <li><Link href="/blog" className="hover:text-neutral-50 transition duration-150">Blog</Link></li>
+              <li><Link href="#" className="hover:text-neutral-50 transition duration-150">About Us</Link></li>
+              <li><Link href="#" className="hover:text-neutral-50 transition duration-150">Contact</Link></li>
+              <li><Link href="#" className="hover:text-neutral-50 transition duration-150">Blog</Link></li>
             </ul>
           </div>
         </div>

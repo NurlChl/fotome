@@ -137,9 +137,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             token.role = 'user';
           }
         } else {
-          token.id = user.id as string;
-          token.role = user.role as string;
-          token.permissions = user.permissions;
+          await connectDB();
+          const dbUser = await User.findById(user.id);
+          if (dbUser) {
+            token.id = dbUser._id.toString();
+            token.role = dbUser.role;
+            token.permissions = dbUser.adminPermissions;
+          } else {
+            token.id = user.id as string;
+            token.role = user.role as string;
+            token.permissions = user.permissions;
+          }
         }
       }
       return token;

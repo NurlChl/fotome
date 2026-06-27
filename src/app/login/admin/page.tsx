@@ -19,6 +19,8 @@ function AdminLoginForm() {
       const role = session?.user?.role;
       if (role === 'admin' || role === 'superadmin') {
         router.push('/dashboard/admin');
+      } else {
+        setError('Akses Ditolak: Akun Anda saat ini tidak memiliki hak akses Administrator. Hubungi Superadmin atau pastikan akun Anda sudah dipromosikan di database.');
       }
     }
   }, [status, session, router]);

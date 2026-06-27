@@ -94,6 +94,13 @@ export default function EventPage() {
   const { data: session, status } = useSession();
   const slug = params.slug as string;
 
+  const getGridWatermarkedUrl = useCallback((url: string) => {
+    if (!url) return '';
+    return url
+      .replace('/w_1200,c_limit,q_auto:good', '/w_400,c_limit,q_auto:low')
+      .replace('/w_1200,c_limit,q_auto_good', '/w_400,c_limit,q_auto_low');
+  }, []);
+
   const [event, setEvent] = useState<EventData | null>(null);
   const [searchState, setSearchState] = useState<SearchState>('idle');
   const [results, setResults] = useState<PhotoResult[]>([]);
@@ -1264,6 +1271,7 @@ export default function EventPage() {
   if (isLoading) {
     return (
       <div className="pt-28 min-h-screen pb-24 bg-neutral-950 text-neutral-100">
+        <title>Memuat Event... | FotoMe</title>
         {/* Event Header Skeleton */}
         <div className="relative border-b border-neutral-900 pb-8 mb-10 overflow-hidden">
           <div className="container mx-auto px-6 max-w-7xl relative z-10">
@@ -1320,6 +1328,8 @@ export default function EventPage() {
 
   return (
     <div className="pt-28 min-h-screen pb-24 bg-neutral-950 text-neutral-100">
+      <title>{`${event.title} | FotoMe`}</title>
+      <meta name="description" content={event.description || `Temukan foto Anda di event ${event.title} menggunakan pencocokan wajah AI.`} />
       
       {/* Event Header Block */}
       <div className="relative border-b border-neutral-900 pb-8 mb-10 overflow-hidden">
@@ -1685,7 +1695,7 @@ export default function EventPage() {
                         <div className="aspect-4/3 overflow-hidden bg-neutral-950 relative">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={result.photo.watermarkedUrl || result.photo.thumbnailUrl}
+                            src={getGridWatermarkedUrl(result.photo.watermarkedUrl) || result.photo.thumbnailUrl}
                             alt="Matched photo"
                             className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                             loading="lazy"
@@ -1910,7 +1920,7 @@ export default function EventPage() {
                         <div className="aspect-4/3 overflow-hidden bg-neutral-950 relative">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={photo.watermarkedUrl || photo.thumbnailUrl}
+                            src={getGridWatermarkedUrl(photo.watermarkedUrl) || photo.thumbnailUrl}
                             alt="Event photo"
                             className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                             loading="lazy"
