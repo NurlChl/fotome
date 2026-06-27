@@ -21,7 +21,22 @@ export default async function proxy(request: NextRequest) {
     request.cookies.get('__Secure-next-auth.session-token')?.value;
 
   const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-  const token = secret ? await getToken({ req: request, secret }) : null;
+  const isSecure = request.nextUrl.protocol === 'https:' || request.headers.get('x-forwarded-proto') === 'https';
+  
+  const token = secret ? await getToken({ 
+    req: request, 
+    secret,
+    secureCookie: isSecure
+  }) : null;
+
+  console.log('[MIDDLEWARE-DEBUG]', {
+    url: request.url,
+    isSecure,
+    hasSessionToken: !!sessionToken,
+    hasToken: !!token,
+    role: token?.role
+  });
+
   const isAuthenticated = !!token || (!secret && !!sessionToken);
   const role = token?.role;
   const isAdmin = role === 'admin' || role === 'superadmin';
