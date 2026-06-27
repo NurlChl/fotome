@@ -59,6 +59,7 @@ function MyPhotos() {
   const touchEndX = useRef<number>(0);
 
   useEffect(() => {
+    console.log('[DEBUG-MYPHOTOS] useSession status:', status);
     if (status === 'unauthenticated') {
       router.push('/login?callbackUrl=/my-photos');
       return;

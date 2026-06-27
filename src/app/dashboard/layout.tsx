@@ -55,6 +55,7 @@ export default function DashboardLayout({
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
+    console.log('[DEBUG-DASHBOARD-LAYOUT] useSession:', { status, session });
     if (status === 'unauthenticated') {
       router.push('/login/admin');
       return;

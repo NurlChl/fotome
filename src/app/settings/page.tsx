@@ -59,6 +59,7 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    console.log('[DEBUG-SETTINGS] useSession status:', status);
     if (status === 'unauthenticated') {
       router.push('/login?callbackUrl=/settings');
       return;
