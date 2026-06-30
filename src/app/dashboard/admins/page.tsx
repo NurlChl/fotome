@@ -11,9 +11,11 @@ import {
   AlertTriangle,
   Edit2,
   Trash2,
-  X,
-  Loader2
+  Shield,
+  Loader2,
+  X
 } from 'lucide-react';
+import { useConfirm } from '@/components/ModalProvider';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
 
 interface AdminData {
@@ -36,6 +38,7 @@ interface AdminData {
 export default function AdminsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { confirm } = useConfirm();
 
   const [admins, setAdmins] = useState<AdminData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -213,7 +216,11 @@ export default function AdminsPage() {
   };
 
   const handleDeleteAdmin = async (adminId: string, adminName: string) => {
-    if (!confirm(`Are you sure you want to delete admin "${adminName}"? This action cannot be undone.`)) {
+    const isConfirmed = await confirm(
+      'Delete Admin Account',
+      `Are you sure you want to delete admin "${adminName}"? This action cannot be undone.`
+    );
+    if (!isConfirmed) {
       return;
     }
 

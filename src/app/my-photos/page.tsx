@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Camera, Download, Loader2, X, ChevronDown, ChevronLeft, ChevronRight, Search as SearchIcon } from 'lucide-react';
+import { useConfirm } from '@/components/ModalProvider';
 
 interface PurchasedPhoto {
   _id: string;
@@ -46,6 +47,7 @@ interface EventOption {
 function MyPhotos() {
   const { status } = useSession();
   const router = useRouter();
+  const { alert: customAlert } = useConfirm();
   const [photos, setPhotos] = useState<PurchasedPhoto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -125,7 +127,8 @@ function MyPhotos() {
       window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error('Download handler error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to download photo. Please try again.');
+      const errMsg = error instanceof Error ? error.message : 'Failed to download photo. Please try again.';
+      await customAlert('Download Error', errMsg, 'error');
     } finally {
       setDownloadingId(null);
     }

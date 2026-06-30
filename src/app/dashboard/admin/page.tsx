@@ -24,6 +24,7 @@ import {
   X,
   Loader2
 } from 'lucide-react';
+import { useConfirm } from '@/components/ModalProvider';
 
 interface UserData {
   _id: string;
@@ -120,6 +121,7 @@ interface ClaimData {
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { confirm, alert: customAlert } = useConfirm();
 
   // Navigation Tab State
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -263,14 +265,15 @@ export default function AdminDashboard() {
       const data = await res.json();
 
       if (res.ok) {
-        alert(`Payout ${action === 'approve' ? 'approved' : 'rejected'} successfully!`);
+        await customAlert('Success', `Payout ${action === 'approve' ? 'approved' : 'rejected'} successfully!`, 'success');
         fetchAdminData();
       } else {
         throw new Error(data.error || 'Failed to process payout');
       }
     } catch (error) {
       console.error('Error processing payout:', error);
-      alert(error instanceof Error ? error.message : 'Something went wrong.');
+      const errMsg = error instanceof Error ? error.message : 'Something went wrong.';
+      await customAlert('Error', errMsg, 'error');
     } finally {
       setActionId(null);
     }
@@ -401,7 +404,11 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteAdmin = async (adminId: string, adminName: string) => {
-    if (!confirm(`Are you sure you want to delete admin "${adminName}"? This action cannot be undone.`)) {
+    const isConfirmed = await confirm(
+      'Delete Admin Account',
+      `Are you sure you want to delete admin "${adminName}"? This action cannot be undone.`
+    );
+    if (!isConfirmed) {
       return;
     }
 

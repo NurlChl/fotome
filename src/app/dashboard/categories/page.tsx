@@ -14,6 +14,7 @@ import {
   Loader2 
 } from 'lucide-react';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
+import { useConfirm } from '@/components/ModalProvider';
 
 interface CategoryData {
   _id: string;
@@ -25,6 +26,7 @@ interface CategoryData {
 export default function CategoriesPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { confirm } = useConfirm();
 
   const [categories, setCategories] = useState<CategoryData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -157,7 +159,11 @@ export default function CategoriesPage() {
   };
 
   const handleDeleteCategory = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete category "${name}"? Existing events using this category will still function, but you won't be able to filter by it easily.`)) {
+    const isConfirmed = await confirm(
+      'Delete Category',
+      `Are you sure you want to delete category "${name}"? Existing events using this category will still function, but you won't be able to filter by it easily.`
+    );
+    if (!isConfirmed) {
       return;
     }
 

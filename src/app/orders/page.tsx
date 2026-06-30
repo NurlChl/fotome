@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Download, ShoppingBag, ExternalLink, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { useConfirm } from '@/components/ModalProvider';
 
 interface OrderItemData {
   _id: string;
@@ -35,6 +36,7 @@ function OrdersContent() {
   const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { alert: customAlert } = useConfirm();
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -169,7 +171,8 @@ function OrdersContent() {
       throw new Error('Payment link is not available for this order. Please contact support.');
     } catch (error) {
       console.error('Payment error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to open payment page. Please try again.');
+      const errMsg = error instanceof Error ? error.message : 'Failed to open payment page. Please try again.';
+      await customAlert('Payment Error', errMsg, 'error');
       setPayingId(null);
     }
   };

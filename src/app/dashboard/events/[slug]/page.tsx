@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2, Upload, Trash2, CheckCircle2, XCircle, Clock, Image
 import { loadModels, detectAllFacesInImage, FaceData } from '@/lib/faceDetector';
 
 import SearchableSelect from '@/components/SearchableSelect';
+import { useConfirm } from '@/components/ModalProvider';
 
 const CATEGORIES = [
   { value: 'marathon', label: 'Marathon' },
@@ -59,6 +60,7 @@ export default function ManageEventPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
+  const { confirm, alert: customAlert } = useConfirm();
 
   const [event, setEvent] = useState<EventData | null>(null);
   const [files, setFiles] = useState<UploadFile[]>([]);
@@ -172,7 +174,11 @@ export default function ManageEventPage() {
   }, [slug]);
 
   const handleDeletePhoto = async (photoId: string) => {
-    if (!confirm('Are you sure you want to delete this photo? This action cannot be undone.')) {
+    const isConfirmed = await confirm(
+      'Delete Photo',
+      'Are you sure you want to delete this photo? This action cannot be undone.'
+    );
+    if (!isConfirmed) {
       return;
     }
 
@@ -196,7 +202,8 @@ export default function ManageEventPage() {
         setEvent({ ...event, photoCount: Math.max(0, event.photoCount - 1) });
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Error deleting photo');
+      const errMsg = error instanceof Error ? error.message : 'Error deleting photo';
+      await customAlert('Error', errMsg, 'error');
     } finally {
       setDeletingPhotoId(null);
     }
@@ -429,7 +436,11 @@ export default function ManageEventPage() {
 
   // Delete voucher
   const deleteVoucher = useCallback(async (voucherId: string) => {
-    if (!confirm('Are you sure you want to delete this voucher?')) {
+    const isConfirmed = await confirm(
+      'Delete Voucher',
+      'Are you sure you want to delete this voucher?'
+    );
+    if (!isConfirmed) {
       return;
     }
 

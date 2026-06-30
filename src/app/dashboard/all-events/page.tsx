@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
+import { useConfirm } from '@/components/ModalProvider';
 
 interface EventData {
   _id: string;
@@ -26,6 +27,7 @@ interface EventData {
 export default function AllEventsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { confirm, alert: customAlert } = useConfirm();
 
   const [events, setEvents] = useState<EventData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +93,11 @@ export default function AllEventsPage() {
   }, [status, session, canManageEvents, router]);
 
   const handleDeleteEvent = async (eventId: string, eventTitle: string) => {
-    if (!confirm(`Are you sure you want to delete event "${eventTitle}"? This action cannot be undone.`)) {
+    const isConfirmed = await confirm(
+      'Delete Event',
+      `Are you sure you want to delete event "${eventTitle}"? This action cannot be undone.`
+    );
+    if (!isConfirmed) {
       return;
     }
 
@@ -105,14 +111,15 @@ export default function AllEventsPage() {
       const data = await res.json();
 
       if (res.ok) {
-        alert(`Event "${eventTitle}" deleted successfully!`);
+        await customAlert('Success', `Event "${eventTitle}" deleted successfully!`, 'success');
         fetchAllEvents(page);
       } else {
         throw new Error(data.error || 'Failed to delete event');
       }
     } catch (error) {
       console.error('Error deleting event:', error);
-      alert(error instanceof Error ? error.message : 'Something went wrong.');
+      const errMsg = error instanceof Error ? error.message : 'Something went wrong.';
+      await customAlert('Error', errMsg, 'error');
     } finally {
       setActionId(null);
     }

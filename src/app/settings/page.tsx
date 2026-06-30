@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Camera, Trash2, Loader2, CheckCircle2, AlertTriangle, User, Lock } from 'lucide-react';
+import { useConfirm } from '@/components/ModalProvider';
 import { getFaceDescriptor } from '@/lib/faceDetector';
 
 interface UserData {
@@ -23,6 +24,7 @@ type RegisterState = 'idle' | 'capturing' | 'processing' | 'success' | 'error';
 export default function SettingsPage() {
   const { status, update } = useSession();
   const router = useRouter();
+  const { confirm } = useConfirm();
 
   const [user, setUser] = useState<UserData | null>(null);
   const [name, setName] = useState('');
@@ -204,10 +206,11 @@ export default function SettingsPage() {
   };
 
   const handleDeleteBiometrics = async () => {
-    const confirmed = confirm(
+    const isConfirmed = await confirm(
+      'Hapus Data Wajah',
       'Apakah Anda yakin ingin menghapus data biometrik Wajah Anda? Tindakan ini akan menghapus data pendaftaran Face ID Anda dari server secara permanen.'
     );
-    if (!confirmed) return;
+    if (!isConfirmed) return;
 
     setIsDeletingBio(true);
     setMessage(null);

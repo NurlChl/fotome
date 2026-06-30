@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useConfirm } from '@/components/ModalProvider';
 
 interface PayoutData {
   _id: string;
@@ -21,6 +22,7 @@ interface PayoutData {
 export default function PayoutsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { alert: customAlert } = useConfirm();
 
   const [payouts, setPayouts] = useState<PayoutData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,14 +87,15 @@ export default function PayoutsPage() {
       const data = await res.json();
 
       if (res.ok) {
-        alert(`Payout ${action === 'approve' ? 'approved' : 'rejected'} successfully!`);
+        await customAlert('Success', `Payout ${action === 'approve' ? 'approved' : 'rejected'} successfully!`, 'success');
         fetchPayouts();
       } else {
         throw new Error(data.error || 'Failed to process payout');
       }
     } catch (error) {
       console.error('Error processing payout:', error);
-      alert(error instanceof Error ? error.message : 'Something went wrong.');
+      const errMsg = error instanceof Error ? error.message : 'Something went wrong.';
+      await customAlert('Error', errMsg, 'error');
     } finally {
       setActionId(null);
     }
