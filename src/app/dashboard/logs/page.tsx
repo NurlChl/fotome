@@ -32,6 +32,7 @@ export default function ActivityLogsPage() {
   const [source, setSource] = useState<string>('mongodb');
   const [isLoading, setIsLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState('');
+  const [page, setPage] = useState(1);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   const canManageLogs = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.manageLogs;
@@ -136,6 +137,10 @@ export default function ActivityLogsPage() {
     return true;
   });
 
+  const logsPerPage = 20;
+  const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
+  const paginatedLogs = filteredLogs.slice((page - 1) * logsPerPage, page * logsPerPage);
+
   if (status === 'loading' || isLoading) {
     return (
       <div className="space-y-6 animate-fadeIn">
@@ -193,7 +198,10 @@ export default function ActivityLogsPage() {
           <div className="w-full sm:w-64">
             <select
               value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
+              onChange={(e) => {
+                setActionFilter(e.target.value);
+                setPage(1);
+              }}
               className="w-full px-3 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-neutral-300 text-sm focus:outline-none focus:border-primary-500 transition duration-200"
             >
               <option value="">Semua Aktivitas</option>
@@ -222,7 +230,7 @@ export default function ActivityLogsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-900">
-                {filteredLogs.map((log) => {
+                {paginatedLogs.map((log) => {
                   const details = getActionDetails(log.action);
                   return (
                     <tr key={log._id} className="hover:bg-neutral-900/10 text-neutral-300">
@@ -277,6 +285,29 @@ export default function ActivityLogsPage() {
         ) : (
           <div className="text-center py-12 text-neutral-500 text-sm">
             No activity logs match the selected filter criteria.
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {filteredLogs.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between pt-5 mt-4 border-t border-neutral-900">
+            <button
+              onClick={() => setPage(page - 1)}
+              disabled={page === 1}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-neutral-400 font-light">
+              Page <span className="font-semibold text-neutral-200">{page}</span> of <span className="font-semibold text-neutral-200">{totalPages}</span>
+            </span>
+            <button
+              onClick={() => setPage(page + 1)}
+              disabled={page === totalPages}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Next
+            </button>
           </div>
         )}
       </div>

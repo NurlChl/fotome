@@ -30,16 +30,25 @@ export default function AllEventsPage() {
   const [events, setEvents] = useState<EventData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalEvents, setTotalEvents] = useState(0);
 
   const isSuperadmin = session?.user?.role === 'superadmin';
   const canManageEvents = isSuperadmin || !!session?.user?.permissions?.manageEvents;
 
-  async function fetchAllEvents() {
+  async function fetchAllEvents(p = 1) {
+    setIsLoading(true);
     try {
-      const res = await fetch('/api/admin/dashboard');
+      const res = await fetch(`/api/admin/dashboard?eventsPage=${p}&eventsLimit=10`);
       const data = await res.json();
       if (res.ok) {
         setEvents(data.events || []);
+        setPage(data.pagination?.events?.page || 1);
+        setTotalPages(data.pagination?.events?.totalPages || 1);
+        setTotalEvents(data.pagination?.events?.total || 0);
       }
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -72,7 +81,7 @@ export default function AllEventsPage() {
       }
 
       timer = setTimeout(() => {
-        fetchAllEvents();
+        fetchAllEvents(1);
       }, 0);
     }
 
@@ -97,7 +106,7 @@ export default function AllEventsPage() {
 
       if (res.ok) {
         alert(`Event "${eventTitle}" deleted successfully!`);
-        fetchAllEvents();
+        fetchAllEvents(page);
       } else {
         throw new Error(data.error || 'Failed to delete event');
       }
@@ -181,7 +190,7 @@ export default function AllEventsPage() {
       <div className="bg-neutral-900/30 border border-neutral-800/50 rounded-2xl p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6 border-b border-neutral-800/50 pb-4">
           <h2 className="text-lg font-bold text-neutral-50">Platform Events</h2>
-          <span className="badge badge-primary">{events.length} events</span>
+          <span className="badge badge-primary">{totalEvents} events</span>
         </div>
         <div className="overflow-x-auto border border-neutral-800/50 rounded-xl">
           <table className="w-full text-left text-sm border-collapse">
@@ -265,6 +274,29 @@ export default function AllEventsPage() {
             </div>
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {events.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between pt-5 mt-4">
+            <button
+              onClick={() => fetchAllEvents(page - 1)}
+              disabled={page === 1}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-neutral-400 font-light">
+              Page <span className="font-semibold text-neutral-200">{page}</span> of <span className="font-semibold text-neutral-200">{totalPages}</span>
+            </span>
+            <button
+              onClick={() => fetchAllEvents(page + 1)}
+              disabled={page === totalPages}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

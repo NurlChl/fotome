@@ -46,6 +46,11 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [events, setEvents] = useState<EventData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'your' | 'all'>('your');
+  
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Withdraw State
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
@@ -71,17 +76,30 @@ export default function DashboardPage() {
         return;
       }
 
-      fetchDashboardData();
+      fetchDashboardData(1, 'your');
     }
   }, [status, router, session]);
 
-  async function fetchDashboardData() {
+  async function fetchDashboardData(p = 1, tab = 'your') {
+    setIsLoading(true);
     try {
-      const res = await fetch('/api/photographer/dashboard');
-      const data = await res.json();
-      if (res.ok) {
-        setStats(data.stats);
-        setEvents(data.events || []);
+      if (tab === 'your') {
+        const res = await fetch(`/api/photographer/dashboard?page=${p}&limit=5`);
+        const data = await res.json();
+        if (res.ok) {
+          setStats(data.stats);
+          setEvents(data.events || []);
+          setPage(data.pagination?.page || 1);
+          setTotalPages(data.pagination?.totalPages || 1);
+        }
+      } else {
+        const res = await fetch(`/api/admin/dashboard?eventsPage=${p}&eventsLimit=5`);
+        const data = await res.json();
+        if (res.ok) {
+          setEvents(data.events || []);
+          setPage(data.pagination?.events?.page || 1);
+          setTotalPages(data.pagination?.events?.totalPages || 1);
+        }
       }
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -89,6 +107,15 @@ export default function DashboardPage() {
       setIsLoading(false);
     }
   }
+
+  const handleTabChange = (newTab: 'your' | 'all') => {
+    setActiveTab(newTab);
+    fetchDashboardData(1, newTab);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    fetchDashboardData(newPage, activeTab);
+  };
 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,8 +307,33 @@ export default function DashboardPage() {
 
       {/* Recent Events */}
       <div className="bg-neutral-900/30 border border-neutral-800/50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm">
-        <div className="mb-4 sm:mb-6 border-b border-neutral-800/50 pb-3">
-          <h2 className="text-base sm:text-lg font-bold text-neutral-50">Your Events</h2>
+        <div className="mb-4 sm:mb-6 border-b border-neutral-800/50 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <h2 className="text-base sm:text-lg font-bold text-neutral-50">
+            {activeTab === 'your' ? 'Your Events' : 'All Platform Events'}
+          </h2>
+          
+          <div className="flex bg-neutral-950 p-1 rounded-xl border border-neutral-850 self-start">
+            <button
+              onClick={() => handleTabChange('your')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'your' 
+                  ? 'bg-primary-500 text-white shadow-sm' 
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              Your Events
+            </button>
+            <button
+              onClick={() => handleTabChange('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                activeTab === 'all' 
+                  ? 'bg-primary-500 text-white shadow-sm' 
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              All Events
+            </button>
+          </div>
         </div>
         
         {events.length > 0 ? (
@@ -336,6 +388,29 @@ export default function DashboardPage() {
             <Link href="/dashboard/events/new" className="btn btn-secondary btn-sm rounded-lg py-2 inline-flex">
               Create First Event
             </Link>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {events.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between pt-5 border-t border-neutral-800/50 mt-4">
+            <button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-neutral-400 font-light">
+              Page <span className="font-semibold text-neutral-200">{page}</span> of <span className="font-semibold text-neutral-200">{totalPages}</span>
+            </span>
+            <button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page === totalPages}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Next
+            </button>
           </div>
         )}
       </div>

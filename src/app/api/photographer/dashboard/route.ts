@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
 import { Event, OrderItem, Order, User } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
@@ -7,7 +7,7 @@ import mongoose from 'mongoose';
 /**
  * GET /api/photographer/dashboard - Fetch photographer's dashboard stats and events
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user || (session.user.role !== 'photographer' && session.user.role !== 'admin' && session.user.role !== 'superadmin')) {
@@ -16,6 +16,11 @@ export async function GET() {
 
     const photographerId = new mongoose.Types.ObjectId(session.user.id);
     await connectDB();
+
+    const { searchParams } = new URL(req.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '5')));
+    const skip = (page - 1) * limit;
 
     // 1. Get user available balance
     const user = await User.findById(photographerId).select('photographerProfile');
@@ -52,7 +57,8 @@ export async function GET() {
 
     const events = await Event.find({ photographerId })
       .sort({ createdAt: -1 })
-      .limit(10)
+      .skip(skip)
+      .limit(limit)
       .lean();
 
     const eventIds = events.map((e) => e._id);
@@ -101,6 +107,13 @@ export async function GET() {
         availableBalance,
       },
       events: eventsWithSales,
+      pagination: {
+        page,
+        limit,
+        total: totalEvents,
+        totalPages: Math.ceil(totalEvents / limit),
+        hasMore: skip + limit < totalEvents,
+      },
     });
   } catch (error) {
     console.error('Error fetching photographer dashboard:', error);

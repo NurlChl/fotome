@@ -20,14 +20,23 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+
   const canManageUsers = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.manageUsers;
 
-  async function fetchUsers() {
+  async function fetchUsers(p = 1) {
+    setIsLoading(true);
     try {
-      const res = await fetch('/api/admin/dashboard');
+      const res = await fetch(`/api/admin/dashboard?usersPage=${p}&usersLimit=10`);
       const data = await res.json();
       if (res.ok) {
         setUsers(data.users || []);
+        setPage(data.pagination?.users?.page || 1);
+        setTotalPages(data.pagination?.users?.totalPages || 1);
+        setTotalUsers(data.pagination?.users?.total || 0);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -51,7 +60,7 @@ export default function UsersPage() {
 
     if (canManageUsers) {
       timer = setTimeout(() => {
-        fetchUsers();
+        fetchUsers(1);
       }, 0);
     }
 
@@ -95,7 +104,7 @@ export default function UsersPage() {
       <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-6 border-b border-neutral-900 pb-4">
           <h2 className="text-lg font-bold text-neutral-50">Registered Accounts</h2>
-          <span className="badge badge-primary">{users.length} users</span>
+          <span className="badge badge-primary">{totalUsers} users</span>
         </div>
         <div className="overflow-x-auto border border-neutral-900 rounded-xl">
           <table className="w-full text-left text-sm border-collapse">
@@ -130,6 +139,29 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {users.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between pt-5 mt-4">
+            <button
+              onClick={() => fetchUsers(page - 1)}
+              disabled={page === 1}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-neutral-400 font-light">
+              Page <span className="font-semibold text-neutral-200">{page}</span> of <span className="font-semibold text-neutral-200">{totalPages}</span>
+            </span>
+            <button
+              onClick={() => fetchUsers(page + 1)}
+              disabled={page === totalPages}
+              className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
