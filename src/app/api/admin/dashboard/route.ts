@@ -3,6 +3,23 @@ import connectDB from '@/lib/db/mongodb';
 import { User, Event, Photo, Order, OrderItem, Payout } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 
+interface AdminDashboardEvent {
+  _id: unknown;
+  photographerId?: {
+    name: string;
+    email: string;
+  } | null;
+  title: string;
+  slug: string;
+  category: string;
+  status: string;
+  photoCount: number;
+  pricePerPhoto: number;
+  eventDate: Date | string;
+  soldCount?: number;
+  revenue?: number;
+}
+
 /**
  * GET /api/admin/dashboard - Fetch admin dashboard stats and pending payouts
  */
@@ -133,7 +150,7 @@ export async function GET(req: NextRequest) {
         eventsTotalPromise,
       ]);
 
-    let eventsWithSales: any[] = [];
+    let eventsWithSales: AdminDashboardEvent[] = [];
     if (events && events.length > 0) {
       const eventIds = events.map((e) => e._id);
       const paidOrders = await Order.find({ status: 'paid' }).distinct('_id');
@@ -163,8 +180,8 @@ export async function GET(req: NextRequest) {
         return acc;
       }, {} as Record<string, { soldCount: number; revenue: number }>);
 
-      eventsWithSales = events.map((event) => {
-        const stats = salesMap[event._id.toString()] || { soldCount: 0, revenue: 0 };
+      eventsWithSales = (events as unknown as AdminDashboardEvent[]).map((event) => {
+        const stats = salesMap[String(event._id)] || { soldCount: 0, revenue: 0 };
         return {
           ...event,
           soldCount: stats.soldCount,
