@@ -328,7 +328,7 @@ export default function CategoriesPage() {
               </label>
               <input
                 type="text"
-                className="w-full px-4 py-3 bg-neutral-950 border border-neutral-900 rounded-xl text-neutral-50 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200 font-mono text-primary-400"
+                className="w-full px-4 py-3 bg-neutral-950 border border-neutral-900 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200 font-mono text-primary-400"
                 placeholder="e.g. birthday-party"
                 value={catValue}
                 onChange={(e) => setCatValue(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
@@ -386,7 +386,7 @@ export default function CategoriesPage() {
                 </label>
                 <input
                   type="text"
-                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-900 rounded-xl text-neutral-50 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200 font-mono text-primary-400"
+                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-900 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200 font-mono text-primary-400"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
                   required

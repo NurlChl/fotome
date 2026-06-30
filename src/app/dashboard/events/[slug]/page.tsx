@@ -87,7 +87,7 @@ export default function ManageEventPage() {
         const res = await fetch('/api/categories');
         const data = await res.json();
         if (res.ok && data.categories) {
-          setCategories(data.categories.map((c: any) => ({ value: c.value, label: c.name })));
+          setCategories(data.categories.map((c: { name: string; value: string }) => ({ value: c.value, label: c.name })));
         }
       } catch (err) {
         console.error('Error fetching categories:', err);

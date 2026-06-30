@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, ComponentType } from 'react';
 import Link from 'next/link';
 import { PartyPopper, PersonStanding, Music, GraduationCap, Heart, Building2, Users, Camera, MapPin, Calendar, Search } from 'lucide-react';
 
@@ -36,7 +36,7 @@ export default function EventsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [categories, setCategories] = useState<{ value: string; label: string; icon: any }[]>(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState<{ value: string; label: string; icon: ComponentType<{ className?: string }> }[]>(DEFAULT_CATEGORIES);
 
   useEffect(() => {
     async function loadCategories() {
@@ -44,7 +44,7 @@ export default function EventsPage() {
         const res = await fetch('/api/categories');
         const data = await res.json();
         if (res.ok && data.categories) {
-          const mapped = data.categories.map((c: any) => {
+          const mapped = data.categories.map((c: { name: string; value: string }) => {
             let icon = Camera;
             if (c.value === 'marathon') icon = PersonStanding;
             else if (c.value === 'concert') icon = Music;
