@@ -861,6 +861,8 @@ export default function ManageEventPage() {
                 src={thumbnailPreview}
                 alt="Event thumbnail"
                 fill
+                sizes="(max-width: 640px) 100vw, 192px"
+                priority
                 className="object-cover"
               />
             ) : (
