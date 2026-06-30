@@ -61,9 +61,35 @@ async function resolveMongodbSrv(uri) {
   }
 }
 
-const originalUri = process.env.MONGODB_URI;
+function loadEnv() {
+  const fs = require('fs');
+  const path = require('path');
+  let envContent = '';
+  try {
+    envContent = fs.readFileSync(path.join(process.cwd(), '.env.local'), 'utf8');
+  } catch (e) {
+    try {
+      envContent = fs.readFileSync(path.join(process.cwd(), '.env'), 'utf8');
+    } catch (e2) {}
+  }
+  if (envContent) {
+    envContent.split(/\r?\n/).forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const parts = trimmed.split('=');
+      const key = parts[0].trim();
+      const val = parts.slice(1).join('=').trim().replace(/^["']|["']$/g, '');
+      if (key && val && !process.env[key]) {
+        process.env[key] = val;
+      }
+    });
+  }
+}
+
+loadEnv();
+const originalUri = process.env.MONGODB_URI || process.env.MONGODB_URL;
 if (!originalUri) {
-  console.error('❌ Error: MONGODB_URI environment variable is required');
+  console.error('❌ Error: MONGODB_URI or MONGODB_URL environment variable is required');
   process.exit(1);
 }
 
