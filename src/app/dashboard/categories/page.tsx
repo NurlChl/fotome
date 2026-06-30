@@ -7,7 +7,6 @@ import {
   Tag, 
   Plus, 
   CheckCircle2, 
-  XCircle, 
   AlertTriangle, 
   Edit2, 
   Trash2, 
