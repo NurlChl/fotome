@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     const canManageTransactions = isSuperadmin || !!p?.manageTransactions;
     const canManageClaims = isSuperadmin || !!p?.manageClaims;
     const canManageLogs = isSuperadmin || !!p?.manageLogs;
+    const canManageCategories = isSuperadmin || !!p?.manageCategories;
 
     if (
       !canManageUsers &&
@@ -28,7 +29,8 @@ export async function GET(req: NextRequest) {
       !canManagePayouts &&
       !canManageTransactions &&
       !canManageClaims &&
-      !canManageLogs
+      !canManageLogs &&
+      !canManageCategories
     ) {
       return NextResponse.json({ error: 'Forbidden: No admin permissions assigned' }, { status: 403 });
     }

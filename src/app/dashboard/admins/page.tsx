@@ -28,6 +28,7 @@ interface AdminData {
     manageLogs: boolean;
     manageTransactions: boolean;
     manageClaims: boolean;
+    manageCategories: boolean;
   };
   createdAt: string;
 }
@@ -50,6 +51,7 @@ export default function AdminsPage() {
   const [permLogs, setPermLogs] = useState(false);
   const [permTransactions, setPermTransactions] = useState(false);
   const [permClaims, setPermClaims] = useState(false);
+  const [permCategories, setPermCategories] = useState(false);
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [adminSuccess, setAdminSuccess] = useState('');
   const [adminError, setAdminError] = useState('');
@@ -65,6 +67,7 @@ export default function AdminsPage() {
   const [editPermLogs, setEditPermLogs] = useState(false);
   const [editPermTransactions, setEditPermTransactions] = useState(false);
   const [editPermClaims, setEditPermClaims] = useState(false);
+  const [editPermCategories, setEditPermCategories] = useState(false);
   const [isUpdatingAdmin, setIsUpdatingAdmin] = useState(false);
 
   const isSuperadmin = session?.user?.role === 'superadmin';
@@ -120,6 +123,7 @@ export default function AdminsPage() {
             manageLogs: permLogs,
             manageTransactions: permTransactions,
             manageClaims: permClaims,
+            manageCategories: permCategories,
           },
         }),
       });
@@ -137,6 +141,7 @@ export default function AdminsPage() {
         setPermLogs(false);
         setPermTransactions(false);
         setPermClaims(false);
+        setPermCategories(false);
         fetchAdminsList();
       } else {
         throw new Error(data.error || 'Failed to create admin');
@@ -158,6 +163,7 @@ export default function AdminsPage() {
     setEditPermLogs(admin.adminPermissions?.manageLogs || false);
     setEditPermTransactions(admin.adminPermissions?.manageTransactions || false);
     setEditPermClaims(admin.adminPermissions?.manageClaims || false);
+    setEditPermCategories(admin.adminPermissions?.manageCategories || false);
     setIsEditModalOpen(true);
   };
 
@@ -184,6 +190,7 @@ export default function AdminsPage() {
               manageLogs: editPermLogs,
               manageTransactions: editPermTransactions,
               manageClaims: editPermClaims,
+              manageCategories: editPermCategories,
             },
         }),
       });
@@ -348,6 +355,12 @@ export default function AdminsPage() {
                             <span className="text-neutral-400">Klaim Manual</span>
                           </div>
                           <div className="flex items-center gap-1.5">
+                            <span className={adm.adminPermissions?.manageCategories ? 'text-emerald-500' : 'text-rose-500'}>
+                              {adm.adminPermissions?.manageCategories ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                            </span>
+                            <span className="text-neutral-400">Event Categories</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
                             <span className={adm.adminPermissions?.manageLogs ? 'text-emerald-500' : 'text-rose-500'}>
                               {adm.adminPermissions?.manageLogs ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
                             </span>
@@ -481,6 +494,15 @@ export default function AdminsPage() {
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input 
                     type="checkbox" 
+                    checked={permCategories} 
+                    onChange={(e) => setPermCategories(e.target.checked)} 
+                    className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-neutral-300">Event Categories</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
                     checked={permLogs} 
                     onChange={(e) => setPermLogs(e.target.checked)} 
                     className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
@@ -590,6 +612,15 @@ export default function AdminsPage() {
                       className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
                     />
                     <span className="text-sm text-neutral-300">Klaim Manual</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={editPermCategories} 
+                      onChange={(e) => setEditPermCategories(e.target.checked)} 
+                      className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-neutral-300">Event Categories</span>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 import SearchableSelect from '@/components/SearchableSelect';
@@ -19,6 +19,22 @@ export default function CreateEventPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [categories, setCategories] = useState<{ value: string; label: string }[]>(CATEGORIES);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (res.ok && data.categories) {
+          setCategories(data.categories.map((c: any) => ({ value: c.value, label: c.name })));
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    }
+    loadCategories();
+  }, []);
 
   const [form, setForm] = useState({
     title: '',
@@ -132,7 +148,7 @@ export default function CreateEventPage() {
           <div>
             <label htmlFor="event-category" className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Category</label>
             <SearchableSelect
-              options={CATEGORIES}
+              options={categories}
               value={form.category}
               onChange={(value) => setForm({ ...form, category: value })}
             />

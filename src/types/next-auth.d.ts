@@ -15,6 +15,7 @@ declare module 'next-auth' {
         manageLogs: boolean;
         manageTransactions: boolean;
         manageClaims: boolean;
+        manageCategories: boolean;
       };
     };
   }
@@ -28,6 +29,7 @@ declare module 'next-auth' {
       manageLogs: boolean;
       manageTransactions: boolean;
       manageClaims: boolean;
+      manageCategories: boolean;
     };
   }
 }
@@ -43,6 +45,7 @@ declare module 'next-auth/jwt' {
       manageLogs: boolean;
       manageTransactions: boolean;
       manageClaims: boolean;
+      manageCategories: boolean;
     };
   }
 }

@@ -46,15 +46,7 @@ export const createEventSchema = z.object({
     .min(10, 'Description must be at least 10 characters')
     .max(2000, 'Description cannot exceed 2000 characters')
     .trim(),
-  category: z.enum([
-    'marathon',
-    'concert',
-    'graduation',
-    'wedding',
-    'corporate',
-    'community',
-    'other',
-  ]),
+  category: z.string().min(1, 'Category is required'),
   location: z.object({
     name: z.string().min(1, 'Location name is required').trim(),
     coordinates: z

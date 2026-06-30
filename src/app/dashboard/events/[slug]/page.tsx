@@ -78,7 +78,23 @@ export default function ManageEventPage() {
   const [editPricePerPhoto, setEditPricePerPhoto] = useState('');
   const [editEventDate, setEditEventDate] = useState('');
   const [editCategory, setEditCategory] = useState('');
+  const [categories, setCategories] = useState<{ value: string; label: string }[]>(CATEGORIES);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (res.ok && data.categories) {
+          setCategories(data.categories.map((c: any) => ({ value: c.value, label: c.name })));
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    }
+    loadCategories();
+  }, []);
 
   // Voucher management state
   const [vouchers, setVouchers] = useState<VoucherData[]>([]);
@@ -998,7 +1014,7 @@ export default function ManageEventPage() {
             <div>
               <label className="text-xs font-semibold text-neutral-300 mb-1 block">Category</label>
               <SearchableSelect
-                options={CATEGORIES}
+                options={categories}
                 value={editCategory}
                 onChange={(value) => setEditCategory(value)}
               />
@@ -1054,7 +1070,7 @@ export default function ManageEventPage() {
             <div className="flex justify-between items-center">
               <span className="text-xs text-neutral-500">Category</span>
               <span className="text-sm font-medium text-neutral-100 capitalize">
-                {CATEGORIES.find((c) => c.value === event.category)?.label || event.category || '-'}
+                {categories.find((c) => c.value === event.category)?.label || event.category || '-'}
               </span>
             </div>
             <div className="pt-2 border-t border-neutral-800">

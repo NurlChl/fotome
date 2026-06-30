@@ -6,7 +6,7 @@ export interface IEvent extends Document {
   title: string;
   slug: string;
   description: string;
-  category: 'marathon' | 'concert' | 'graduation' | 'wedding' | 'corporate' | 'community' | 'other';
+  category: string;
   location: {
     name: string;
     coordinates?: {
@@ -53,7 +53,6 @@ const eventSchema = new Schema<IEvent>(
     },
     category: {
       type: String,
-      enum: ['marathon', 'concert', 'graduation', 'wedding', 'corporate', 'community', 'other'],
       required: true,
       index: true,
     },

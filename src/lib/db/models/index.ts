@@ -12,6 +12,7 @@ export { default as SavedPhoto } from './SavedPhoto';
 export { default as ActivityLog } from './ActivityLog';
 export { default as Voucher } from './Voucher';
 export { default as VoucherUsage } from './VoucherUsage';
+export { default as Category } from './Category';
 
 export type { IUser } from './User';
 export type { IEvent } from './Event';
@@ -27,3 +28,4 @@ export type { ISavedPhoto } from './SavedPhoto';
 export type { IActivityLog } from './ActivityLog';
 export type { IVoucher } from './Voucher';
 export type { IVoucherUsage } from './VoucherUsage';
+export type { ICategory } from './Category';

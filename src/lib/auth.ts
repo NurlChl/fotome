@@ -164,6 +164,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           manageLogs: boolean;
           manageTransactions: boolean;
           manageClaims: boolean;
+          manageCategories: boolean;
         } | undefined;
       }
       return session;

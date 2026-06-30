@@ -18,7 +18,7 @@ interface EventData {
   photographerId?: { name: string; avatar?: string };
 }
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { value: 'all', label: 'All Events', icon: PartyPopper },
   { value: 'marathon', label: 'Marathon', icon: PersonStanding },
   { value: 'concert', label: 'Concert', icon: Music },
@@ -36,6 +36,36 @@ export default function EventsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [categories, setCategories] = useState<{ value: string; label: string; icon: any }[]>(DEFAULT_CATEGORIES);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (res.ok && data.categories) {
+          const mapped = data.categories.map((c: any) => {
+            let icon = Camera;
+            if (c.value === 'marathon') icon = PersonStanding;
+            else if (c.value === 'concert') icon = Music;
+            else if (c.value === 'graduation') icon = GraduationCap;
+            else if (c.value === 'wedding') icon = Heart;
+            else if (c.value === 'corporate') icon = Building2;
+            else if (c.value === 'community') icon = Users;
+            else if (c.value === 'other') icon = Camera;
+            return { value: c.value, label: c.name, icon };
+          });
+          setCategories([
+            { value: 'all', label: 'All Events', icon: PartyPopper },
+            ...mapped
+          ]);
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    }
+    loadCategories();
+  }, []);
 
   const fetchEvents = useCallback(async () => {
     setIsLoading(true);
@@ -115,7 +145,7 @@ export default function EventsPage() {
 
           {/* Categories */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 w-full md:w-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
-            {CATEGORIES.map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat.value}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-medium whitespace-nowrap transition-all duration-200 ${
@@ -181,7 +211,7 @@ export default function EventsPage() {
                       </div>
                     )}
                     <div className="absolute top-3 left-3 bg-neutral-950/80 backdrop-blur-md border border-neutral-800/50 text-neutral-50 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shadow-sm">
-                      {CATEGORIES.find((c) => c.value === event.category)?.label || event.category}
+                      {categories.find((c) => c.value === event.category)?.label || event.category}
                     </div>
                   </div>
                   <div className="p-5 flex flex-col grow space-y-1 overflow-hidden">
