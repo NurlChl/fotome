@@ -46,6 +46,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [events, setEvents] = useState<EventData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isEventsLoading, setIsEventsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'your' | 'all'>('your');
   
   // Pagination State
@@ -76,12 +77,16 @@ export default function DashboardPage() {
         return;
       }
 
-      fetchDashboardData(1, 'your');
+      fetchDashboardData(1, 'your', true);
     }
   }, [status, router, session]);
 
-  async function fetchDashboardData(p = 1, tab = 'your') {
-    setIsLoading(true);
+  async function fetchDashboardData(p = 1, tab = 'your', isInitial = false) {
+    if (isInitial) {
+      setIsLoading(true);
+    } else {
+      setIsEventsLoading(true);
+    }
     try {
       if (tab === 'your') {
         const res = await fetch(`/api/photographer/dashboard?page=${p}&limit=5`);
@@ -105,6 +110,7 @@ export default function DashboardPage() {
       console.error('Error fetching dashboard stats:', error);
     } finally {
       setIsLoading(false);
+      setIsEventsLoading(false);
     }
   }
 
@@ -336,7 +342,31 @@ export default function DashboardPage() {
           </div>
         </div>
         
-        {events.length > 0 ? (
+        {isEventsLoading ? (
+          <div className="space-y-3 sm:space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex flex-col gap-4 p-4 sm:p-5 bg-neutral-950/40 border border-neutral-800/50 rounded-xl sm:rounded-2xl animate-pulse shadow-sm">
+                <div className="space-y-2 min-w-0">
+                  <div className="h-5 bg-neutral-800/50 rounded w-2/3 animate-pulse" />
+                  <div className="h-4 bg-neutral-800/30 rounded w-1/3 animate-pulse" />
+                </div>
+                <div className="flex justify-between items-center mt-2 pt-2 border-t border-neutral-900">
+                  <div className="flex gap-6 sm:gap-8">
+                    <div>
+                      <div className="h-5 bg-neutral-800/50 rounded w-16 animate-pulse" />
+                      <div className="h-3 bg-neutral-800/30 rounded w-12 mt-1 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="h-5 bg-neutral-800/50 rounded w-16 animate-pulse" />
+                      <div className="h-3 bg-neutral-800/30 rounded w-12 mt-1 animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="h-8 bg-neutral-800/50 rounded-lg w-20 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : events.length > 0 ? (
           <div className="space-y-3 sm:space-y-4">
             {events.map((event) => (
               <div key={event._id} className="flex flex-col gap-4 p-4 sm:p-5 bg-neutral-950/40 border border-neutral-800/50 rounded-xl sm:rounded-2xl hover:border-neutral-700 transition duration-200 shadow-sm">

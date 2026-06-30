@@ -133,6 +133,46 @@ export async function GET(req: NextRequest) {
         eventsTotalPromise,
       ]);
 
+    let eventsWithSales: any[] = [];
+    if (events && events.length > 0) {
+      const eventIds = events.map((e) => e._id);
+      const paidOrders = await Order.find({ status: 'paid' }).distinct('_id');
+      const salesByEvent = await OrderItem.aggregate([
+        {
+          $match: {
+            eventId: { $in: eventIds },
+            orderId: { $in: paidOrders },
+          },
+        },
+        {
+          $group: {
+            _id: '$eventId',
+            soldCount: { $sum: 1 },
+            revenue: { $sum: '$photographerRevenue' },
+          },
+        },
+      ]);
+
+      const salesMap = salesByEvent.reduce((acc, item) => {
+        if (item._id) {
+          acc[item._id.toString()] = {
+            soldCount: item.soldCount,
+            revenue: item.revenue,
+          };
+        }
+        return acc;
+      }, {} as Record<string, { soldCount: number; revenue: number }>);
+
+      eventsWithSales = events.map((event) => {
+        const stats = salesMap[event._id.toString()] || { soldCount: 0, revenue: 0 };
+        return {
+          ...event,
+          soldCount: stats.soldCount,
+          revenue: stats.revenue,
+        };
+      });
+    }
+
     const pendingPayouts = (payoutStats as { _id: string; total: number }[]).find((p) => p._id === 'pending')?.total || 0;
     const completedPayouts = (payoutStats as { _id: string; total: number }[]).find((p) => p._id === 'completed')?.total || 0;
 
@@ -149,7 +189,7 @@ export async function GET(req: NextRequest) {
       },
       users,
       payouts,
-      events,
+      events: eventsWithSales,
       pagination: {
         users: {
           page: usersPage,
