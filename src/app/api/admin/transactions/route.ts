@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if (role === 'admin' && !session.user.permissions?.managePayouts) {
+    if (role === 'admin' && !session.user.permissions?.manageTransactions) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

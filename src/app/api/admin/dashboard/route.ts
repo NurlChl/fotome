@@ -18,8 +18,18 @@ export async function GET(req: NextRequest) {
     const canManageUsers = isSuperadmin || !!p?.manageUsers;
     const canManageEvents = isSuperadmin || !!p?.manageEvents;
     const canManagePayouts = isSuperadmin || !!p?.managePayouts;
+    const canManageTransactions = isSuperadmin || !!p?.manageTransactions;
+    const canManageClaims = isSuperadmin || !!p?.manageClaims;
+    const canManageLogs = isSuperadmin || !!p?.manageLogs;
 
-    if (!canManageUsers && !canManageEvents && !canManagePayouts) {
+    if (
+      !canManageUsers &&
+      !canManageEvents &&
+      !canManagePayouts &&
+      !canManageTransactions &&
+      !canManageClaims &&
+      !canManageLogs
+    ) {
       return NextResponse.json({ error: 'Forbidden: No admin permissions assigned' }, { status: 403 });
     }
 

@@ -13,6 +13,8 @@ declare module 'next-auth' {
         manageEvents: boolean;
         managePayouts: boolean;
         manageLogs: boolean;
+        manageTransactions: boolean;
+        manageClaims: boolean;
       };
     };
   }
@@ -24,6 +26,8 @@ declare module 'next-auth' {
       manageEvents: boolean;
       managePayouts: boolean;
       manageLogs: boolean;
+      manageTransactions: boolean;
+      manageClaims: boolean;
     };
   }
 }
@@ -37,6 +41,8 @@ declare module 'next-auth/jwt' {
       manageEvents: boolean;
       managePayouts: boolean;
       manageLogs: boolean;
+      manageTransactions: boolean;
+      manageClaims: boolean;
     };
   }
 }

@@ -17,6 +17,8 @@ export interface IUser extends Document {
     manageEvents: boolean;
     managePayouts: boolean;
     manageLogs: boolean;
+    manageTransactions: boolean;
+    manageClaims: boolean;
   };
   isVerified: boolean;
   isBanned: boolean;
@@ -78,6 +80,8 @@ const userSchema = new Schema<IUser>(
       manageEvents: { type: Boolean, default: false },
       managePayouts: { type: Boolean, default: false },
       manageLogs: { type: Boolean, default: false },
+      manageTransactions: { type: Boolean, default: false },
+      manageClaims: { type: Boolean, default: false },
     },
     isVerified: {
       type: Boolean,

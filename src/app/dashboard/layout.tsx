@@ -33,8 +33,8 @@ const adminLinks = [
   { href: '/dashboard/users', label: 'Users', icon: Users, permission: 'manageUsers' },
   { href: '/dashboard/all-events', label: 'All Events', icon: Calendar, permission: 'manageEvents' },
   { href: '/dashboard/payouts', label: 'Payouts', icon: DollarSign, permission: 'managePayouts' },
-  { href: '/dashboard/transactions', label: 'Transaksi Foto', icon: Receipt, permission: 'managePayouts' },
-  { href: '/dashboard/claims', label: 'Klaim Manual', icon: Fingerprint, permission: 'manageUsers' },
+  { href: '/dashboard/transactions', label: 'Transaksi Foto', icon: Receipt, permission: 'manageTransactions' },
+  { href: '/dashboard/claims', label: 'Klaim Manual', icon: Fingerprint, permission: 'manageClaims' },
   { href: '/dashboard/logs', label: 'Aktivitas (Axiom)', icon: Activity, permission: 'manageLogs' },
   { href: '/dashboard/admins', label: 'Admins', icon: ShieldAlert, superadminOnly: true },
 ];
@@ -126,6 +126,8 @@ export default function DashboardLayout({
   const canManageEvents = isSuperadmin || !!session?.user?.permissions?.manageEvents;
   const canManagePayouts = isSuperadmin || !!session?.user?.permissions?.managePayouts;
   const canManageLogs = isSuperadmin || !!session?.user?.permissions?.manageLogs;
+  const canManageTransactions = isSuperadmin || !!session?.user?.permissions?.manageTransactions;
+  const canManageClaims = isSuperadmin || !!session?.user?.permissions?.manageClaims;
 
   // Don't block navigation or crash if session is loading or not loaded
   if (status === 'loading' || !session || !session.user) {
@@ -252,7 +254,7 @@ export default function DashboardLayout({
           </nav>
 
           {/* Admin Links */}
-          {(isSuperadmin || canManageUsers || canManageEvents || canManagePayouts || canManageLogs) && (
+          {(isSuperadmin || canManageUsers || canManageEvents || canManagePayouts || canManageLogs || canManageTransactions || canManageClaims) && (
             <nav className="space-y-1">
               <div className="border-t border-neutral-800 my-3" />
               <p className="text-xs font-bold uppercase text-neutral-600 px-3 mb-2 tracking-wider">Admin</p>
@@ -263,6 +265,8 @@ export default function DashboardLayout({
                 if (link.permission === 'manageEvents' && !canManageEvents) return null;
                 if (link.permission === 'managePayouts' && !canManagePayouts) return null;
                 if (link.permission === 'manageLogs' && !canManageLogs) return null;
+                if (link.permission === 'manageTransactions' && !canManageTransactions) return null;
+                if (link.permission === 'manageClaims' && !canManageClaims) return null;
 
                 const Icon = link.icon;
                 const isActive = pathname === link.href;

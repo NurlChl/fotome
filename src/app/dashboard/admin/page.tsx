@@ -73,6 +73,8 @@ interface AdminData {
     manageEvents: boolean;
     managePayouts: boolean;
     manageLogs: boolean;
+    manageTransactions: boolean;
+    manageClaims: boolean;
   };
   createdAt: string;
 }
@@ -140,6 +142,8 @@ export default function AdminDashboard() {
   const [permEvents, setPermEvents] = useState(false);
   const [permPayouts, setPermPayouts] = useState(false);
   const [permLogs, setPermLogs] = useState(false);
+  const [permTransactions, setPermTransactions] = useState(false);
+  const [permClaims, setPermClaims] = useState(false);
   const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [adminSuccess, setAdminSuccess] = useState('');
   const [adminError, setAdminError] = useState('');
@@ -153,6 +157,8 @@ export default function AdminDashboard() {
   const [editPermEvents, setEditPermEvents] = useState(false);
   const [editPermPayouts, setEditPermPayouts] = useState(false);
   const [editPermLogs, setEditPermLogs] = useState(false);
+  const [editPermTransactions, setEditPermTransactions] = useState(false);
+  const [editPermClaims, setEditPermClaims] = useState(false);
   const [isUpdatingAdmin, setIsUpdatingAdmin] = useState(false);
 
   // Access Roles & Permissions Flags
@@ -286,6 +292,8 @@ export default function AdminDashboard() {
             manageEvents: permEvents,
             managePayouts: permPayouts,
             manageLogs: permLogs,
+            manageTransactions: permTransactions,
+            manageClaims: permClaims,
           },
         }),
       });
@@ -301,6 +309,8 @@ export default function AdminDashboard() {
         setPermEvents(false);
         setPermPayouts(false);
         setPermLogs(false);
+        setPermTransactions(false);
+        setPermClaims(false);
         fetchAdminsList();
       } else {
         if (data.error === 'Validation error' && data.details) {
@@ -327,6 +337,8 @@ export default function AdminDashboard() {
     setEditPermEvents(admin.adminPermissions?.manageEvents || false);
     setEditPermPayouts(admin.adminPermissions?.managePayouts || false);
     setEditPermLogs(admin.adminPermissions?.manageLogs || false);
+    setEditPermTransactions(admin.adminPermissions?.manageTransactions || false);
+    setEditPermClaims(admin.adminPermissions?.manageClaims || false);
     setIsEditModalOpen(true);
   };
 
@@ -351,6 +363,8 @@ export default function AdminDashboard() {
             manageEvents: editPermEvents,
             managePayouts: editPermPayouts,
             manageLogs: editPermLogs,
+            manageTransactions: editPermTransactions,
+            manageClaims: editPermClaims,
           },
         }),
       });
@@ -874,6 +888,18 @@ export default function AdminDashboard() {
                                 <span className="text-neutral-400">Payouts</span>
                               </div>
                               <div className="flex items-center gap-1.5">
+                                <span className={adm.adminPermissions?.manageTransactions ? 'text-emerald-500' : 'text-rose-500'}>
+                                  {adm.adminPermissions?.manageTransactions ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                                </span>
+                                <span className="text-neutral-400">Transaksi Foto</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className={adm.adminPermissions?.manageClaims ? 'text-emerald-500' : 'text-rose-500'}>
+                                  {adm.adminPermissions?.manageClaims ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                                </span>
+                                <span className="text-neutral-400">Klaim Manual</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
                                 <span className={adm.adminPermissions?.manageLogs ? 'text-emerald-500' : 'text-rose-500'}>
                                   {adm.adminPermissions?.manageLogs ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
                                 </span>
@@ -1000,6 +1026,24 @@ export default function AdminDashboard() {
                         onChange={(e) => setPermPayouts(e.target.checked)} 
                       />
                       <span>Payouts</span>
+                    </label>
+                    <label className="flex items-center justify-center gap-2 px-3 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-sm text-neutral-300 cursor-pointer hover:bg-neutral-900/50 hover:border-neutral-800 transition duration-200">
+                      <input 
+                        type="checkbox" 
+                        className="rounded accent-primary-500 text-primary-600 focus:ring-primary-500 bg-neutral-950 border-neutral-900" 
+                        checked={permTransactions} 
+                        onChange={(e) => setPermTransactions(e.target.checked)} 
+                      />
+                      <span>Transaksi Foto</span>
+                    </label>
+                    <label className="flex items-center justify-center gap-2 px-3 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-sm text-neutral-300 cursor-pointer hover:bg-neutral-900/50 hover:border-neutral-800 transition duration-200">
+                      <input 
+                        type="checkbox" 
+                        className="rounded accent-primary-500 text-primary-600 focus:ring-primary-500 bg-neutral-950 border-neutral-900" 
+                        checked={permClaims} 
+                        onChange={(e) => setPermClaims(e.target.checked)} 
+                      />
+                      <span>Klaim Manual</span>
                     </label>
                     <label className="flex items-center justify-center gap-2 px-3 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-sm text-neutral-300 cursor-pointer hover:bg-neutral-900/50 hover:border-neutral-800 transition duration-200">
                       <input 
@@ -1212,6 +1256,24 @@ export default function AdminDashboard() {
                         className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
                       />
                       <span className="text-sm text-neutral-300">Payouts</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={editPermTransactions} 
+                        onChange={(e) => setEditPermTransactions(e.target.checked)} 
+                        className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-neutral-300">Transaksi Foto</span>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={editPermClaims} 
+                        onChange={(e) => setEditPermClaims(e.target.checked)} 
+                        className="w-4 h-4 rounded bg-neutral-950 border-neutral-800 text-primary-500 focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-neutral-300">Klaim Manual</span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input 
