@@ -7,6 +7,18 @@ import Image from 'next/image';
 import { ArrowLeft, Loader2, Upload, Trash2, CheckCircle2, XCircle, Clock, ImageIcon, AlertCircle, X } from 'lucide-react';
 import { loadModels, detectAllFacesInImage, FaceData } from '@/lib/faceDetector';
 
+import SearchableSelect from '@/components/SearchableSelect';
+
+const CATEGORIES = [
+  { value: 'marathon', label: 'Marathon' },
+  { value: 'concert', label: 'Concert' },
+  { value: 'graduation', label: 'Graduation' },
+  { value: 'wedding', label: 'Wedding' },
+  { value: 'corporate', label: 'Corporate' },
+  { value: 'community', label: 'Community' },
+  { value: 'other', label: 'Other' },
+];
+
 interface UploadFile {
   file: File;
   status: 'pending' | 'uploading' | 'success' | 'failed';
@@ -24,6 +36,7 @@ interface EventData {
   coverImage?: string;
   pricePerPhoto: number;
   eventDate: string;
+  category?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +77,7 @@ export default function ManageEventPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editPricePerPhoto, setEditPricePerPhoto] = useState('');
   const [editEventDate, setEditEventDate] = useState('');
+  const [editCategory, setEditCategory] = useState('');
   const [isSavingDetails, setIsSavingDetails] = useState(false);
 
   // Voucher management state
@@ -184,6 +198,7 @@ export default function ManageEventPage() {
         // Initialize edit form state
         setEditTitle(data.event.title);
         setEditPricePerPhoto(data.event.pricePerPhoto.toString());
+        setEditCategory(data.event.category || 'other');
         // Format date for input
         const eventDate = new Date(data.event.eventDate);
         const formattedDate = eventDate.toISOString().split('T')[0];
@@ -733,6 +748,7 @@ export default function ManageEventPage() {
         title: editTitle,
         pricePerPhoto: Number(editPricePerPhoto),
         eventDate: editEventDate,
+        category: editCategory,
       };
       const res = await fetch(`/api/events/${slug}`, {
         method: 'PUT',
@@ -977,6 +993,15 @@ export default function ManageEventPage() {
               />
             </div>
 
+            <div>
+              <label className="text-xs font-semibold text-neutral-300 mb-1 block">Category</label>
+              <SearchableSelect
+                options={CATEGORIES}
+                value={editCategory}
+                onChange={(value) => setEditCategory(value)}
+              />
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button
                 onClick={handleSaveDetails}
@@ -997,6 +1022,7 @@ export default function ManageEventPage() {
                   if (event) {
                     setEditTitle(event.title);
                     setEditPricePerPhoto(event.pricePerPhoto.toString());
+                    setEditCategory(event.category || 'other');
                     const eventDate = new Date(event.eventDate);
                     const formattedDate = eventDate.toISOString().split('T')[0];
                     setEditEventDate(formattedDate);
@@ -1022,6 +1048,12 @@ export default function ManageEventPage() {
             <div className="flex justify-between items-center">
               <span className="text-xs text-neutral-500">Price per Photo</span>
               <span className="text-sm font-medium text-neutral-100">Rp {event.pricePerPhoto.toLocaleString('id-ID')}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-neutral-500">Category</span>
+              <span className="text-sm font-medium text-neutral-100 capitalize">
+                {CATEGORIES.find((c) => c.value === event.category)?.label || event.category || '-'}
+              </span>
             </div>
             <div className="pt-2 border-t border-neutral-800">
               <div className="flex justify-between items-center text-[10px] text-neutral-500">

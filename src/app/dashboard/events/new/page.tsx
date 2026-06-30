@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
+import SearchableSelect from '@/components/SearchableSelect';
 
 const CATEGORIES = [
   { value: 'marathon', label: 'Marathon' },
@@ -130,19 +131,11 @@ export default function CreateEventPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="event-category" className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Category</label>
-            <select
-              id="event-category"
-              name="category"
-              className="w-full px-4 py-3 bg-neutral-950 border border-neutral-900 rounded-xl text-neutral-50 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200"
+            <SearchableSelect
+              options={CATEGORIES}
               value={form.category}
-              onChange={handleChange}
-            >
-              {CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value} className="bg-neutral-900">
-                  {cat.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => setForm({ ...form, category: value })}
+            />
           </div>
 
           <div>
