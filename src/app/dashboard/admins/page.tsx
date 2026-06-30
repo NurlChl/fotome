@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Edit2,
   Trash2,
-  Shield,
   Loader2,
   X
 } from 'lucide-react';

@@ -458,7 +458,7 @@ export default function ManageEventPage() {
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Something went wrong');
     }
-  }, [slug, fetchVouchers]);
+  }, [slug, fetchVouchers, confirm]);
 
   const addFiles = useCallback((newFiles: File[]) => {
     const uploadFiles: UploadFile[] = newFiles.map((file) => ({

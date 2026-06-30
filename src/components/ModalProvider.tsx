@@ -62,7 +62,10 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={{ confirm, alert }}>
       {children}
       {modalState.isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+        <div 
+          style={{ zIndex: 9999 }}
+          className="fixed inset-0 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn"
+        >
           <div className="w-full max-w-md bg-neutral-900 border border-neutral-850 rounded-2xl shadow-2xl p-6 relative">
             <button
               onClick={() => handleClose(false)}
