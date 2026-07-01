@@ -41,17 +41,14 @@ export default async function proxy(request: NextRequest) {
   const role = token?.role;
   const isAdmin = role === 'admin' || role === 'superadmin';
 
-  // Admin routing logic
-  if (pathname.startsWith('/dashboard/admin')) {
-    if (!isAuthenticated || !isAdmin) {
-      return applySecurityHeaders(NextResponse.redirect(new URL('/login/admin', request.url)));
-    }
-    return applySecurityHeaders(NextResponse.next());
+  // Redirect old admin route to new dashboard
+  if (pathname === '/dashboard/admin' || pathname.startsWith('/dashboard/admin/')) {
+    return applySecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)));
   }
 
   if (pathname === '/login/admin') {
     if (isAuthenticated && isAdmin) {
-      return applySecurityHeaders(NextResponse.redirect(new URL('/dashboard/admin', request.url)));
+      return applySecurityHeaders(NextResponse.redirect(new URL('/dashboard', request.url)));
     }
     return applySecurityHeaders(NextResponse.next());
   }

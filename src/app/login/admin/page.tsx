@@ -18,7 +18,7 @@ function AdminLoginForm() {
     if (status === 'authenticated') {
       const role = session?.user?.role;
       if (role === 'admin' || role === 'superadmin') {
-        router.push('/dashboard/admin');
+        router.push('/dashboard');
       } else {
         setTimeout(() => {
           setError('Akses Ditolak: Akun Anda saat ini tidak memiliki hak akses Administrator. Hubungi Superadmin atau pastikan akun Anda sudah dipromosikan di database.');
@@ -47,7 +47,7 @@ function AdminLoginForm() {
         const role = sessionData?.user?.role;
 
         if (role === 'admin' || role === 'superadmin') {
-          router.push('/dashboard/admin');
+          router.push('/dashboard');
           router.refresh();
         } else {
           // Force sign out since regular users are blocked from admin portal

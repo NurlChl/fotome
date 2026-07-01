@@ -35,7 +35,7 @@ function LoginForm() {
         const role = sessionData?.user?.role;
 
         if (role === 'admin' || role === 'superadmin') {
-          router.push('/dashboard/admin');
+          router.push('/dashboard');
         } else {
           router.push(callbackUrl);
         }
