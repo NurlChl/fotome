@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, ComponentType } from 'react';
 import Link from 'next/link';
-import { PartyPopper, PersonStanding, Music, GraduationCap, Heart, Building2, Users, Camera, MapPin, Calendar, Search } from 'lucide-react';
+import { PartyPopper, PersonStanding, Music, GraduationCap, Heart, Building2, Users, Camera, MapPin, Calendar, Search, Loader2 } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface EventData {
   _id: string;
@@ -33,6 +34,8 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventData[]>([]);
   const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 400);
+  const [isSearching, setIsSearching] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -67,14 +70,14 @@ export default function EventsPage() {
     loadCategories();
   }, []);
 
-  const fetchEvents = useCallback(async () => {
-    setIsLoading(true);
+  const fetchEvents = useCallback(async (searchVal = '') => {
+    setIsSearching(true);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: '12',
         ...(category !== 'all' && { category }),
-        ...(search && { search }),
+        ...(searchVal && { search: searchVal }),
       });
 
       const res = await fetch(`/api/events?${params}`);
@@ -88,12 +91,16 @@ export default function EventsPage() {
       console.error('Failed to fetch events:', error);
     } finally {
       setIsLoading(false);
+      setIsSearching(false);
     }
-  }, [page, category, search]);
+  }, [page, category]);
 
   useEffect(() => {
-    setTimeout(() => fetchEvents(), 0);
-  }, [fetchEvents]);
+    const timer = setTimeout(() => {
+      fetchEvents(debouncedSearch);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [page, category, debouncedSearch, fetchEvents]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('id-ID', {
@@ -138,9 +145,14 @@ export default function EventsPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full bg-neutral-900/50 border border-neutral-800/50 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 rounded-xl pl-11 pr-4 py-3 text-sm text-neutral-50 placeholder:text-neutral-500 transition outline-none"
+              className="w-full bg-neutral-900/50 border border-neutral-800/50 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 rounded-xl pl-11 pr-10 py-3 text-sm text-neutral-50 placeholder:text-neutral-500 transition outline-none"
               id="events-search"
             />
+            {isSearching && (
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+              </span>
+            )}
           </div>
 
           {/* Categories */}
