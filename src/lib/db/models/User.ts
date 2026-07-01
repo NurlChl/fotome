@@ -33,9 +33,12 @@ export interface IUser extends Document {
   };
   verificationToken?: string;
   verificationTokenExpiry?: Date;
+  verificationEmailSentAt?: Date;
   resetPasswordToken?: string;
   resetPasswordExpiry?: Date;
   faceDescriptor?: number[];
+  faceDescriptorLeft?: number[];
+  faceDescriptorRight?: number[];
   faceImageUrl?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -95,6 +98,7 @@ const userSchema = new Schema<IUser>(
     },
     verificationToken: { type: String },
     verificationTokenExpiry: { type: Date },
+    verificationEmailSentAt: { type: Date },
     resetPasswordToken: { type: String },
     resetPasswordExpiry: { type: Date },
     photographerProfile: {
@@ -106,6 +110,26 @@ const userSchema = new Schema<IUser>(
       availableBalance: { type: Number, default: 0 },
     },
     faceDescriptor: {
+      type: [Number],
+      default: undefined,
+      validate: {
+        validator: function (v: number[]) {
+          return !v || v.length === 128;
+        },
+        message: 'Face descriptor must be a 128-dimensional vector',
+      },
+    },
+    faceDescriptorLeft: {
+      type: [Number],
+      default: undefined,
+      validate: {
+        validator: function (v: number[]) {
+          return !v || v.length === 128;
+        },
+        message: 'Face descriptor must be a 128-dimensional vector',
+      },
+    },
+    faceDescriptorRight: {
       type: [Number],
       default: undefined,
       validate: {

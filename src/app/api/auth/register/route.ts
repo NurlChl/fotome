@@ -40,8 +40,41 @@ export async function POST(req: NextRequest) {
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
+      // If user exists but hasn't verified yet, help them resend
+      if (!existingUser.isVerified) {
+        const COOLDOWN_MS = 60 * 1000;
+        const canResend = !existingUser.verificationEmailSentAt ||
+          (Date.now() - existingUser.verificationEmailSentAt.getTime() >= COOLDOWN_MS);
+
+        if (canResend) {
+          const verificationToken = crypto.randomBytes(32).toString('hex');
+          const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+          existingUser.verificationToken = verificationToken;
+          existingUser.verificationTokenExpiry = verificationTokenExpiry;
+          existingUser.verificationEmailSentAt = new Date();
+          await existingUser.save();
+          sendVerificationEmail(email, verificationToken).catch((err) => {
+            console.error('Failed to resend verification email in background:', err);
+          });
+        }
+
+        const remainingSecs = canResend ? 0 : Math.ceil(
+          (COOLDOWN_MS - (Date.now() - existingUser.verificationEmailSentAt!.getTime())) / 1000
+        );
+
+        return NextResponse.json(
+          {
+            error: 'Email ini sudah terdaftar namun belum diverifikasi.',
+            code: 'unverified',
+            emailSent: canResend,
+            cooldownSecs: remainingSecs,
+          },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
-        { error: 'An account with this email already exists' },
+        { error: 'Email ini sudah terdaftar. Silakan masuk atau gunakan email lain.' },
         { status: 409 }
       );
     }
@@ -59,11 +92,14 @@ export async function POST(req: NextRequest) {
       isVerified: false,
       verificationToken,
       verificationTokenExpiry,
+      verificationEmailSentAt: new Date(),
       photographerProfile: undefined,
     });
 
-    // Send email
-    await sendVerificationEmail(email, verificationToken);
+    // Send email asynchronously in the background
+    sendVerificationEmail(email, verificationToken).catch((err) => {
+      console.error('Failed to send verification email in background:', err);
+    });
 
     return NextResponse.json(
       {

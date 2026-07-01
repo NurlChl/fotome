@@ -32,8 +32,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { descriptor, eventId, threshold } = result.data;
+    const { descriptor, descriptors, eventId, threshold } = result.data;
     const skipHardNegatives = body.skipHardNegatives === true; // For manual claim verification
+
+    // Normalize query vectors
+    const queryVectors: number[][] = [];
+    if (descriptors && descriptors.length > 0) {
+      queryVectors.push(...descriptors);
+    } else if (descriptor) {
+      queryVectors.push(descriptor);
+    }
+
+    if (queryVectors.length === 0) {
+      return NextResponse.json(
+        { error: 'Either descriptor or descriptors must be provided.' },
+        { status: 400 }
+      );
+    }
 
     await connectDB();
 
@@ -51,141 +66,147 @@ export async function POST(req: NextRequest) {
       hardNegatives = await getUserHardNegatives(session.user.id);
     }
 
-    // Use MongoDB Atlas Vector Search
-    // This requires a vector search index named "face_vector_index"
-    // on the FaceDescriptor collection
-    let matchingFaces;
+    // Collect all matches from all query vectors
+    const allMatches: FaceSearchResult[] = [];
 
-    try {
-      matchingFaces = await FaceDescriptor.aggregate([
-        {
-          $vectorSearch: {
-            index: 'face_vector_index',
-            path: 'descriptor',
-            queryVector: descriptor,
-            numCandidates: 600,
-            limit: 300,
-            filter: {
-              eventId: new mongoose.Types.ObjectId(eventId),
+    for (const vector of queryVectors) {
+      let matchingFaces = [];
+      try {
+        matchingFaces = await FaceDescriptor.aggregate([
+          {
+            $vectorSearch: {
+              index: 'face_vector_index',
+              path: 'descriptor',
+              queryVector: vector,
+              numCandidates: 600,
+              limit: 300,
+              filter: {
+                eventId: new mongoose.Types.ObjectId(eventId),
+              },
             },
           },
-        },
-        {
-          $lookup: {
-            from: 'photos',
-            localField: 'photoId',
-            foreignField: '_id',
-            as: 'photo',
+          {
+            $lookup: {
+              from: 'photos',
+              localField: 'photoId',
+              foreignField: '_id',
+              as: 'photo',
+            },
           },
-        },
-        {
-          $unwind: '$photo',
-        },
-        {
-          $match: {
-            'photo.status': 'active',
+          {
+            $unwind: '$photo',
           },
-        },
-        {
-          $project: {
-            _id: 1,
-            photoId: 1,
-            boundingBox: 1,
-            descriptor: 1,
-            photo: {
+          {
+            $match: {
+              'photo.status': 'active',
+            },
+          },
+          {
+            $project: {
               _id: 1,
-              watermarkedUrl: 1,
-              thumbnailUrl: 1,
-              width: 1,
-              height: 1,
-              createdAt: 1,
-              faceCount: 1,
-              hasFaces: 1,
+              photoId: 1,
+              boundingBox: 1,
+              descriptor: 1,
+              photo: {
+                _id: 1,
+                watermarkedUrl: 1,
+                thumbnailUrl: 1,
+                width: 1,
+                height: 1,
+                createdAt: 1,
+                faceCount: 1,
+                hasFaces: 1,
+              },
             },
           },
-        },
-      ]);
+        ]);
 
-      // Filter and calculate exact Euclidean distance if Atlas Vector Search returned results
-      if (matchingFaces.length > 0) {
-        const maxDistance = threshold ?? 0.60;
-        const typedFaces = matchingFaces as unknown as {
-          _id: mongoose.Types.ObjectId;
-          photoId: mongoose.Types.ObjectId;
-          descriptor: number[];
-          boundingBox: { x: number; y: number; width: number; height: number };
-          photo: PopulatedPhoto;
-        }[];
+        // Filter and calculate exact Euclidean distance if Atlas Vector Search returned results
+        if (matchingFaces.length > 0) {
+          const maxDistance = threshold ?? 0.60;
+          const typedFaces = matchingFaces as unknown as {
+            _id: mongoose.Types.ObjectId;
+            photoId: mongoose.Types.ObjectId;
+            descriptor: number[];
+            boundingBox: { x: number; y: number; width: number; height: number };
+            photo: PopulatedPhoto;
+          }[];
 
-        const mappedResults: FaceSearchResult[] = typedFaces
-          .map((face) => {
-            const dist = euclideanDistance(descriptor, face.descriptor);
-            const score = Math.max(0, 1 - dist);
-            return {
-              _id: face._id,
-              photoId: face.photoId,
-              score,
-              distance: dist,
-              boundingBox: face.boundingBox,
-              photo: face.photo,
-              descriptor: face.descriptor,
-            };
-          })
-          .filter((r) => {
-            // Filter by distance threshold
-            if (r.distance > maxDistance) return false;
-            
-            // Filter by hard negatives if user is logged in
-            if (hardNegatives.length > 0 && r.descriptor) {
-              return !isHardNegativeMatch(r.descriptor, hardNegatives, r.distance);
-            }
-            
-            return true;
-          })
-          .sort((a, b) => a.distance - b.distance);
+          const mappedResults: FaceSearchResult[] = typedFaces
+            .map((face) => {
+              const dist = euclideanDistance(vector, face.descriptor);
+              const score = Math.max(0, 1 - dist);
+              return {
+                _id: face._id,
+                photoId: face.photoId,
+                score,
+                distance: dist,
+                boundingBox: face.boundingBox,
+                photo: face.photo,
+                descriptor: face.descriptor,
+              };
+            })
+            .filter((r) => {
+              // Filter by distance threshold
+              if (r.distance > maxDistance) return false;
+              
+              // Filter by hard negatives if user is logged in
+              if (hardNegatives.length > 0 && r.descriptor) {
+                return !isHardNegativeMatch(r.descriptor, hardNegatives, r.distance);
+              }
+              
+              return true;
+            })
+            .sort((a, b) => a.distance - b.distance);
 
-        matchingFaces = deduplicateByPhotoId(mappedResults);
-      }
-
-      // Smart Fallback: If Vector Search returns 0 results, check if descriptors exist for this event.
-      // If there are descriptors but Vector Search matched nothing, it suggests the Atlas Index is missing or inactive.
-      if (matchingFaces.length === 0) {
-        const totalInEvent = await FaceDescriptor.countDocuments({
-          eventId: new mongoose.Types.ObjectId(eventId),
-        });
-        if (totalInEvent > 0) {
-          console.log(`Vector search returned 0 results but event has ${totalInEvent} descriptors. Running fallback manual search.`);
-          matchingFaces = await fallbackFaceSearch(descriptor, eventId, threshold, hardNegatives);
+          matchingFaces = deduplicateByPhotoId(mappedResults);
         }
+
+        // Smart Fallback: If Vector Search returns 0 results, check if descriptors exist for this event.
+        if (matchingFaces.length === 0) {
+          const totalInEvent = await FaceDescriptor.countDocuments({
+            eventId: new mongoose.Types.ObjectId(eventId),
+          });
+          if (totalInEvent > 0) {
+            matchingFaces = await fallbackFaceSearch(vector, eventId, threshold, hardNegatives);
+          }
+        }
+      } catch (vectorSearchError) {
+        // Fallback: if vector search index doesn't exist, use manual distance manually
+        console.warn(
+          'Vector search failed, using fallback:',
+          vectorSearchError
+        );
+        matchingFaces = await fallbackFaceSearch(vector, eventId, threshold, hardNegatives);
       }
-    } catch (vectorSearchError) {
-      // Fallback: if vector search index doesn't exist, use cosine similarity manually
-      console.warn(
-        'Vector search failed, using fallback cosine similarity:',
-        vectorSearchError
-      );
-      matchingFaces = await fallbackFaceSearch(descriptor, eventId, threshold, hardNegatives);
+
+      allMatches.push(...matchingFaces);
     }
 
+    // Deduplicate and sort by closest distance overall
+    let finalResults = deduplicateByPhotoId(
+      allMatches.sort((a, b) => a.distance - b.distance)
+    );
+
     // Filter out flagged photo IDs
-    if (flaggedPhotoIds.length > 0 && matchingFaces.length > 0) {
-      matchingFaces = matchingFaces.filter((r: FaceSearchResult) => {
+    if (flaggedPhotoIds.length > 0 && finalResults.length > 0) {
+      finalResults = finalResults.filter((r: FaceSearchResult) => {
         const photoIdStr = r.photo?._id?.toString() || r.photoId?.toString();
         return !flaggedPhotoIds.includes(photoIdStr);
       });
     }
 
-    // Log the search for analytics
+    // Log the search for analytics (just logging total match count)
     await FaceSearch.create({
       userId: session?.user?.id || undefined,
       eventId,
-      resultsCount: matchingFaces.length,
+      resultsCount: finalResults.length,
       ipAddress: getClientIp(req),
     });
 
     return NextResponse.json({
-      results: matchingFaces,
-      count: matchingFaces.length,
+      results: finalResults,
+      count: finalResults.length,
     });
   } catch (error) {
     console.error('Face search error:', error);

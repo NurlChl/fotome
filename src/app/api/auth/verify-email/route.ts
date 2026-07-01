@@ -14,16 +14,22 @@ export async function POST(req: NextRequest) {
 
     const user = await User.findOne({
       verificationToken: token,
-      verificationTokenExpiry: { $gt: new Date() },
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'Token tidak valid atau sudah kedaluwarsa' }, { status: 400 });
+      return NextResponse.json({ error: 'Token verifikasi tidak valid atau tidak ditemukan.' }, { status: 400 });
+    }
+
+    if (user.verificationTokenExpiry && user.verificationTokenExpiry < new Date()) {
+      return NextResponse.json({ 
+        error: 'Tautan verifikasi telah kedaluwarsa. Silakan masuk (login) ke akun Anda untuk mengirim ulang tautan verifikasi baru.' 
+      }, { status: 400 });
     }
 
     user.isVerified = true;
     user.verificationToken = undefined;
     user.verificationTokenExpiry = undefined;
+    user.verificationEmailSentAt = undefined;
     await user.save();
 
     return NextResponse.json({ message: 'Email berhasil diverifikasi' });

@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       PhotoClaim.find({})
         .populate({
           path: 'userId',
-          select: 'name email faceDescriptor faceImageUrl',
+          select: 'name email faceDescriptor faceDescriptorLeft faceDescriptorRight faceImageUrl',
         })
         .populate({
           path: 'eventId',

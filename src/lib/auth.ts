@@ -1,8 +1,16 @@
-import NextAuth from 'next-auth';
+import NextAuth, { CredentialsSignin } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import connectDB from '@/lib/db/mongodb';
 import User from '@/lib/db/models/User';
+
+class UnverifiedEmailError extends CredentialsSignin {
+  code = 'unverified_email';
+}
+
+class SuspendedAccountError extends CredentialsSignin {
+  code = 'suspended_account';
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
@@ -19,7 +27,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error('Email and password are required');
+          throw new CredentialsSignin();
         }
 
         await connectDB();
@@ -29,20 +37,20 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }).select('+passwordHash');
 
         if (!user) {
-          throw new Error('Invalid email or password');
+          throw new CredentialsSignin();
         }
 
         if (user.isBanned) {
-          throw new Error('Your account has been suspended');
+          throw new SuspendedAccountError();
         }
 
         const isValid = await user.comparePassword(credentials.password as string);
         if (!isValid) {
-          throw new Error('Invalid email or password');
+          throw new CredentialsSignin();
         }
 
         if (!user.isVerified) {
-          throw new Error('Verifikasi email Anda terlebih dahulu. Periksa kotak masuk Anda.');
+          throw new UnverifiedEmailError();
         }
 
         return {

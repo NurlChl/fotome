@@ -7,6 +7,201 @@ import { Camera, Trash2, Loader2, CheckCircle2, AlertTriangle, User, Lock } from
 import { useConfirm } from '@/components/ModalProvider';
 import { getFaceDescriptor } from '@/lib/faceDetector';
 
+// Beautiful responsive face direction guide visualizer
+function FaceGuideVisualizer({ step }: { step: 'front' | 'left' | 'right' }) {
+  const getTransform = () => {
+    switch (step) {
+      case 'left':
+        return 'translateX(-12px) rotateY(-20deg)';
+      case 'right':
+        return 'translateX(12px) rotateY(20deg)';
+      default:
+        return 'translateX(0px) rotateY(0deg)';
+    }
+  };
+
+  return (
+    <div className="w-16 h-16 relative flex items-center justify-center bg-neutral-950/80 rounded-2xl border border-neutral-800 shadow-inner overflow-hidden shrink-0">
+      {/* Glow aura */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--tw-gradient-stops))] from-primary-500/10 via-transparent to-transparent pointer-events-none" />
+      
+      {/* 3D-like morphing face guide */}
+      <div 
+        className="w-12 h-12 flex items-center justify-center transition-all duration-500 ease-out"
+        style={{ 
+          transform: getTransform(),
+          perspective: '100px'
+        }}
+      >
+        <svg 
+          viewBox="0 0 100 100" 
+          fill="none" 
+          stroke="currentColor" 
+          className="w-10 h-10 text-primary-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+        >
+          {/* Head Shape */}
+          <path 
+            d="M50 15 C28 15 25 35 25 55 C25 78 35 85 50 85 C65 85 75 78 75 55 C75 35 72 15 50 15 Z" 
+            strokeWidth="3" 
+            fill="currentColor" 
+            fillOpacity="0.04"
+          />
+          {/* Ears */}
+          <path d="M24 45 C20 45 20 55 24 55" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M76 45 C80 45 80 55 76 55" strokeWidth="2.5" strokeLinecap="round" />
+          
+          {/* Face elements group - shifts extra for 3D effect */}
+          <g 
+            className="transition-transform duration-500" 
+            style={{ 
+              transform: step === 'left' ? 'translateX(-8px)' : step === 'right' ? 'translateX(8px)' : 'translateX(0)' 
+            }}
+          >
+            {/* Eyes */}
+            <circle cx="38" cy="48" r="3.5" fill="currentColor" />
+            <circle cx="62" cy="48" r="3.5" fill="currentColor" />
+            
+            {/* Nose */}
+            <path d="M50 44 L50 56 L46 56" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            
+            {/* Smile */}
+            <path 
+              d="M42 66 Q50 71 58 66" 
+              strokeWidth="3" 
+              strokeLinecap="round" 
+            />
+          </g>
+
+          {/* Guide arrows indicating direction */}
+          {step === 'left' && (
+            <path 
+              d="M18 50 L6 50 M12 44 L6 50 L12 56" 
+              stroke="#f43f5e" 
+              strokeWidth="3.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+              className="animate-pulse"
+            />
+          )}
+          {step === 'right' && (
+            <path 
+              d="M82 50 L94 50 M88 44 L94 50 L88 56" 
+              stroke="#f43f5e" 
+              strokeWidth="3.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
+              className="animate-pulse"
+            />
+          )}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// Beautiful interactive SVG overlay for camera guide (KYC/Bank-style)
+function BiometricCameraOverlay({ step }: { step: 'front' | 'left' | 'right' }) {
+  return (
+    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+      <svg
+        viewBox="0 0 400 300"
+        className="w-full h-full text-primary-500 transition-all duration-500"
+        fill="none"
+        stroke="currentColor"
+      >
+        {/* Semi-transparent dark overlay surrounding the focus area using mask */}
+        <defs>
+          <mask id="biometric-mask-settings">
+            {/* White background: keep visible */}
+            <rect width="400" height="300" fill="white" />
+            {/* Black focus area: transparent window */}
+            {step === 'front' && (
+              <g fill="black">
+                {/* Oval Wajah */}
+                <path d="M200,60 C145,60 135,110 135,160 C135,215 155,240 200,240 C245,240 265,215 265,160 C265,110 255,60 200,60 Z" />
+                {/* Telinga Kiri */}
+                <path d="M135,135 C122,135 122,175 135,175 Z" />
+                {/* Telinga Kanan */}
+                <path d="M265,135 C278,135 278,175 265,175 Z" />
+              </g>
+            )}
+            {step === 'left' && (
+              <g fill="black">
+                {/* Profil Wajah Kiri */}
+                <path d="M215,60 C165,60 155,100 155,130 C155,135 142,140 142,145 C142,150 155,153 155,160 C155,215 175,240 215,240 C250,240 265,215 265,160 C265,110 255,60 215,60 Z" />
+                {/* Telinga Kanan */}
+                <path d="M265,135 C278,135 278,175 265,175 Z" />
+              </g>
+            )}
+            {step === 'right' && (
+              <g fill="black">
+                {/* Profil Wajah Kanan */}
+                <path d="M185,60 C145,60 135,110 135,160 C135,215 150,240 185,240 C225,240 245,215 245,160 C245,153 258,150 258,145 C258,140 245,135 245,130 C245,100 235,60 185,60 Z" />
+                {/* Telinga Kiri */}
+                <path d="M135,135 C122,135 122,175 135,175 Z" />
+              </g>
+            )}
+          </mask>
+        </defs>
+
+        {/* Apply the mask to darken background (KYC bank registration look) */}
+        <rect width="400" height="300" fill="black" fillOpacity="0.45" mask="url(#biometric-mask-settings)" />
+
+        {/* Dynamic Biometric Face & Ears Outlines with opacity */}
+        <g className="transition-all duration-500" strokeWidth="2" strokeOpacity="0.6">
+          {step === 'front' && (
+            <g className="animate-pulse">
+              {/* Head shape */}
+              <path
+                d="M200,60 C145,60 135,110 135,160 C135,215 155,240 200,240 C245,240 265,215 265,160 C265,110 255,60 200,60 Z"
+                strokeWidth="2.5"
+              />
+              {/* Left ear */}
+              <path d="M135,135 C122,135 122,175 135,175" strokeWidth="2" strokeLinecap="round" />
+              {/* Right ear */}
+              <path d="M265,135 C278,135 278,175 265,175" strokeWidth="2" strokeLinecap="round" />
+              
+              {/* Guidelines (eyes & mouth markers) */}
+              <line x1="155" y1="140" x2="245" y2="140" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.4" />
+              <line x1="200" y1="75" x2="200" y2="225" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.4" />
+            </g>
+          )}
+
+          {step === 'left' && (
+            <g className="animate-pulse">
+              {/* Head shape profiling left (nose/mouth sticking out to the left) */}
+              <path
+                d="M215,60 C165,60 155,100 155,130 C155,135 142,140 142,145 C142,150 155,153 155,160 C155,215 175,240 215,240 C250,240 265,215 265,160 C265,110 255,60 215,60 Z"
+                strokeWidth="2.5"
+              />
+              {/* Right ear visible in the right side */}
+              <path d="M265,135 C278,135 278,175 265,175" strokeWidth="2" strokeLinecap="round" />
+              
+              {/* Sidelined guide markers */}
+              <line x1="175" y1="140" x2="250" y2="140" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.4" />
+            </g>
+          )}
+
+          {step === 'right' && (
+            <g className="animate-pulse">
+              {/* Head shape profiling right (nose/mouth sticking out to the right) */}
+              <path
+                d="M185,60 C145,60 135,110 135,160 C135,215 150,240 185,240 C225,240 245,215 245,160 C245,153 258,150 258,145 C258,140 245,135 245,130 C245,100 235,60 185,60 Z"
+                strokeWidth="2.5"
+              />
+              {/* Left ear visible in the left side */}
+              <path d="M135,135 C122,135 122,175 135,175" strokeWidth="2" strokeLinecap="round" />
+              
+              {/* Sidelined guide markers */}
+              <line x1="150" y1="140" x2="225" y2="140" strokeWidth="1.5" strokeDasharray="3 3" strokeOpacity="0.4" />
+            </g>
+          )}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 interface UserData {
   _id: string;
   name: string;
@@ -42,6 +237,12 @@ export default function SettingsPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [capturedDescriptors, setCapturedDescriptors] = useState<{
+    front?: number[];
+    left?: number[];
+    right?: number[];
+  }>({});
+  const [captureStep, setCaptureStep] = useState<'front' | 'left' | 'right'>('front');
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -127,6 +328,8 @@ export default function SettingsPage() {
   const startCamera = async () => {
     try {
       setErrorMessage('');
+      setCapturedDescriptors({});
+      setCaptureStep('front');
       setRegisterState('capturing');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: 640, height: 480 },
@@ -147,20 +350,25 @@ export default function SettingsPage() {
   const registerFace = async () => {
     if (!videoRef.current || !canvasRef.current) return;
 
-    setRegisterState('processing');
+    const video = videoRef.current;
     const canvas = canvasRef.current;
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
+
+    // Validate + capture canvas BEFORE changing state (video still in DOM and active)
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) {
+      setErrorMessage('Kamera belum siap. Tunggu sebentar lalu coba kembali.');
+      setRegisterState('error');
+      return;
+    }
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
 
-    // Draw frame to canvas
-    ctx.drawImage(videoRef.current, 0, 0);
-
-    // Stop webcam
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-    }
+    // Now set processing — video stays in DOM (kept visible via isCameraActive condition below)
+    setRegisterState('processing');
 
     try {
       // Process face descriptor using local face-api.js model
@@ -169,27 +377,45 @@ export default function SettingsPage() {
         throw new Error('Wajah tidak terdeteksi. Pastikan pencahayaan cukup dan wajah terlihat jelas.');
       }
 
-      // Convert canvas to base64 data URL
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const nextDescriptors = { ...capturedDescriptors, [captureStep]: descriptor };
+      setCapturedDescriptors(nextDescriptors);
 
-      // Save descriptor to user profile
-      const res = await fetch('/api/users/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          faceDescriptor: descriptor,
-          faceImageUrl: dataUrl
-        }),
-      });
+      if (captureStep === 'front') {
+        setCaptureStep('left');
+        setRegisterState('capturing');
+      } else if (captureStep === 'left') {
+        setCaptureStep('right');
+        setRegisterState('capturing');
+      } else {
+        // Stop webcam after capturing all three profiles
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+        }
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to save biometric profile.');
+        // Convert canvas to base64 data URL
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+        // Save descriptor to user profile
+        const res = await fetch('/api/users/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            faceDescriptor: nextDescriptors.front,
+            faceDescriptorLeft: nextDescriptors.left,
+            faceDescriptorRight: nextDescriptors.right,
+            faceImageUrl: dataUrl
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to save biometric profile.');
+        }
+
+        setRegisterState('success');
+        setMessage({ type: 'success', text: 'Face ID registered successfully with multiple profile angles!' });
+        await fetchProfile();
       }
-
-      setRegisterState('success');
-      setMessage({ type: 'success', text: 'Face ID registered successfully!' });
-      await fetchProfile();
     } catch (err: unknown) {
       const error = err as Error;
       console.error(error);
@@ -202,6 +428,8 @@ export default function SettingsPage() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
+    setCapturedDescriptors({});
+    setCaptureStep('front');
     setRegisterState('idle');
   };
 
@@ -347,28 +575,57 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {registerState === 'capturing' && (
-                <div className="flex flex-col items-center gap-4 max-w-sm mx-auto">
+              {/* Camera view + capturing controls — video always in DOM when camera active */}
+              {(registerState === 'capturing' || registerState === 'processing') && (
+                <div className="flex flex-col items-center gap-4 max-w-sm mx-auto animate-fadeIn">
+                  {registerState === 'capturing' && (
+                    <div className="flex flex-col sm:flex-row items-center gap-4 w-full bg-neutral-950/40 border border-neutral-850 p-4 rounded-2xl text-left mb-2">
+                      <FaceGuideVisualizer step={captureStep} />
+                      <div className="space-y-0.5 text-center sm:text-left">
+                        <span className="text-[10px] uppercase font-extrabold tracking-wider text-primary-400">
+                          Langkah {captureStep === 'front' ? '1' : captureStep === 'left' ? '2' : '3'} dari 3
+                        </span>
+                        <h4 className="font-bold text-sm text-neutral-50">
+                          {captureStep === 'front' && 'Hadap Depan'}
+                          {captureStep === 'left' && 'Hadap Kiri'}
+                          {captureStep === 'right' && 'Hadap Kanan'}
+                        </h4>
+                        <p className="text-[11px] text-neutral-400 leading-normal">
+                          {captureStep === 'front' && 'Posisikan wajah lurus menghadap kamera.'}
+                          {captureStep === 'left' && 'Palingkan wajah sedikit ke kiri agar profil kiri terlihat.'}
+                          {captureStep === 'right' && 'Palingkan wajah sedikit ke kanan agar profil kanan terlihat.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <div className="w-full aspect-4/3 rounded-xl overflow-hidden border border-neutral-800 bg-black relative">
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
                     <canvas ref={canvasRef} className="hidden" />
+                    {registerState === 'capturing' && (
+                      <BiometricCameraOverlay step={captureStep} />
+                    )}
+                    {registerState === 'processing' && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <Loader2 className="w-10 h-10 text-primary-400 animate-spin" />
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2 w-full">
-                    <button onClick={cancelCapture} className="btn btn-secondary flex-1 rounded-lg text-xs">
-                      Cancel
-                    </button>
-                    <button onClick={registerFace} className="btn btn-primary flex-1 rounded-lg text-xs font-semibold">
-                      Capture & Save
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {registerState === 'processing' && (
-                <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-                  <Loader2 className="w-8 h-8 text-primary-600 animate-spin" />
-                  <p className="text-sm text-neutral-400 font-medium">Extracting face biometrics...</p>
-                  <p className="text-xs text-neutral-500 font-light">This is processed completely locally on your device.</p>
+                  {registerState === 'capturing' && (
+                    <div className="flex gap-2 w-full mt-2">
+                      <button onClick={cancelCapture} className="btn btn-secondary flex-1 rounded-lg text-xs">
+                        Cancel
+                      </button>
+                      <button onClick={registerFace} className="btn btn-primary flex-1 rounded-lg text-xs font-semibold">
+                        {captureStep === 'right' ? 'Capture & Save' : 'Berikutnya'}
+                      </button>
+                    </div>
+                  )}
+                  {registerState === 'processing' && (
+                    <div className="text-center">
+                      <p className="text-sm text-neutral-400 font-medium">Extracting face biometrics...</p>
+                      <p className="text-xs text-neutral-500 font-light mt-1">This is processed completely locally on your device.</p>
+                    </div>
+                  )}
                 </div>
               )}
 

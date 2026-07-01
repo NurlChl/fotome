@@ -64,7 +64,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const { name, bio, portfolio, faceDescriptor, faceImageUrl } = result.data;
+    const { name, bio, portfolio, faceDescriptor, faceDescriptorLeft, faceDescriptorRight, faceImageUrl } = result.data;
 
     if (name) user.name = name;
 
@@ -96,10 +96,18 @@ export async function PUT(req: NextRequest) {
 
     if (faceDescriptor) {
       user.faceDescriptor = faceDescriptor;
+    }
+    if (faceDescriptorLeft) {
+      user.faceDescriptorLeft = faceDescriptorLeft;
+    }
+    if (faceDescriptorRight) {
+      user.faceDescriptorRight = faceDescriptorRight;
+    }
+    if (faceDescriptor || faceDescriptorLeft || faceDescriptorRight) {
       await logActivity(
         user._id.toString(),
         'REGISTER_FACE_ID',
-        'Registered/updated Face ID biometric profile',
+        'Registered/updated Face ID biometric profile with multi-angle descriptors',
         getClientIp(req)
       );
     }
@@ -163,6 +171,8 @@ export async function DELETE(req: NextRequest) {
     const user = await User.findById(session.user.id);
     if (user) {
       user.faceDescriptor = undefined;
+      user.faceDescriptorLeft = undefined;
+      user.faceDescriptorRight = undefined;
       user.faceImageUrl = undefined;
       await user.save();
     }

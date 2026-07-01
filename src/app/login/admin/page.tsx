@@ -2,16 +2,52 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import { signIn, signOut, getSession, useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, Lock, Mail, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 
+const getFriendlyErrorMessage = (errorCode: string | null): string => {
+  if (!errorCode) return '';
+  switch (errorCode) {
+    case 'Configuration':
+      return 'Terjadi kesalahan konfigurasi server. Silakan hubungi administrator.';
+    case 'CredentialsSignin':
+      return 'Email atau password salah.';
+    case 'unverified_email':
+      return 'Verifikasi email Anda terlebih dahulu. Periksa kotak masuk Anda.';
+    case 'suspended_account':
+      return 'Akses ditolak. Akun Anda telah ditangguhkan.';
+    case 'AccessDenied':
+      return 'Akses ditolak. Akun Anda mungkin telah ditangguhkan atau dinonaktifkan.';
+    case 'OAuthAccountNotLinked':
+      return 'Email ini sudah terdaftar dengan metode login lain. Silakan masuk menggunakan metode pendaftaran awal Anda.';
+    case 'OAuthSignin':
+    case 'OAuthCallback':
+    case 'OAuthCreateAccount':
+    case 'Callback':
+      return 'Gagal masuk menggunakan akun Google Anda. Silakan coba kembali.';
+    default:
+      const lowerCode = errorCode.toLowerCase();
+      if (lowerCode.includes('verifikasi email') || lowerCode.includes('unverified')) {
+        return 'Verifikasi email Anda terlebih dahulu. Periksa kotak masuk Anda.';
+      }
+      if (lowerCode.includes('suspended') || lowerCode.includes('ditangguhkan')) {
+        return 'Akses ditolak. Akun Anda telah ditangguhkan.';
+      }
+      if (lowerCode.includes('email or password') || lowerCode.includes('salah')) {
+        return 'Email atau password salah.';
+      }
+      return 'Gagal masuk. Silakan periksa kembali data Anda.';
+  }
+};
+
 function AdminLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => getFriendlyErrorMessage(searchParams.get('error')));
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -40,7 +76,21 @@ function AdminLoginForm() {
       });
 
       if (result?.error) {
-        setError(result.error);
+        try {
+          const verifyStatusRes = await fetch('/api/auth/verify-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          const verifyStatusData = await verifyStatusRes.json();
+          if (verifyStatusRes.ok && verifyStatusData.unverified) {
+            setError('Verifikasi email Anda terlebih dahulu. Periksa kotak masuk Anda.');
+            return;
+          }
+        } catch (err) {
+          console.error('Verify status check failed:', err);
+        }
+        setError(getFriendlyErrorMessage(result.error));
       } else {
         // Retrieve session to verify role
         const sessionData = await getSession();

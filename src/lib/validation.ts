@@ -75,7 +75,13 @@ export const updateEventSchema = createEventSchema.partial().extend({
 export const faceSearchSchema = z.object({
   descriptor: z
     .array(z.number())
-    .length(128, 'Face descriptor must be a 128-dimensional vector'),
+    .length(128, 'Face descriptor must be a 128-dimensional vector')
+    .optional(),
+  descriptors: z
+    .array(
+      z.array(z.number()).length(128, 'Each face descriptor must be a 128-dimensional vector')
+    )
+    .optional(),
   eventId: z.string().min(1, 'Event ID is required'),
   threshold: z
     .number()
@@ -123,6 +129,14 @@ export const updateProfileSchema = z.object({
   bio: z.string().max(500).optional(),
   portfolio: z.string().url().optional().or(z.literal('')),
   faceDescriptor: z
+    .array(z.number())
+    .length(128, 'Face descriptor must be a 128-dimensional vector')
+    .optional(),
+  faceDescriptorLeft: z
+    .array(z.number())
+    .length(128, 'Face descriptor must be a 128-dimensional vector')
+    .optional(),
+  faceDescriptorRight: z
     .array(z.number())
     .length(128, 'Face descriptor must be a 128-dimensional vector')
     .optional(),

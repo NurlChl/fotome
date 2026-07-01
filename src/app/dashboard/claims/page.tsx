@@ -14,6 +14,8 @@ interface ClaimEntry {
     name: string;
     email: string;
     faceDescriptor?: number[];
+    faceDescriptorLeft?: number[];
+    faceDescriptorRight?: number[];
     faceImageUrl?: string;
   };
   eventId?: {
@@ -517,10 +519,30 @@ export default function ManualClaimsPage() {
                 <div className="border-t border-neutral-850 pt-4 mt-2">
                   <span className="block text-[10px] font-bold uppercase text-neutral-500 tracking-wider mb-2">Distance Match Rating</span>
                   
-                  {selectedClaim.userId?.faceDescriptor && selectedClaim.selfieDescriptor ? (
+                  {selectedClaim.userId && selectedClaim.selfieDescriptor ? (
                     (() => {
-                      const dist = calculateDistance(selectedClaim.userId.faceDescriptor, selectedClaim.selfieDescriptor);
-                      if (dist === null) return null;
+                      // Compare selfieDescriptor against all registered descriptors (front, left, right)
+                      const user = selectedClaim.userId;
+                      const descriptors: number[][] = [];
+                      if (user.faceDescriptor && user.faceDescriptor.length === 128) {
+                        descriptors.push(user.faceDescriptor);
+                      }
+                      if (user.faceDescriptorLeft && user.faceDescriptorLeft.length === 128) {
+                        descriptors.push(user.faceDescriptorLeft);
+                      }
+                      if (user.faceDescriptorRight && user.faceDescriptorRight.length === 128) {
+                        descriptors.push(user.faceDescriptorRight);
+                      }
+
+                      let dist = Infinity;
+                      for (const d of descriptors) {
+                        const calculated = calculateDistance(d, selectedClaim.selfieDescriptor);
+                        if (calculated !== null && calculated < dist) {
+                          dist = calculated;
+                        }
+                      }
+
+                      if (dist === Infinity) return null;
                       
                       let statusText = '';
                       let badgeColor = '';

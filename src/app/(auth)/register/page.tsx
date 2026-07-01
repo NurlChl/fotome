@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 
 import { signIn } from 'next-auth/react';
-import { User, Mail, Lock, Loader2, Camera, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { User, Mail, Lock, Loader2, Camera, ArrowLeft, AlertTriangle, MailCheck } from 'lucide-react';
 
 function RegisterForm() {
   const [name, setName] = useState('');
@@ -14,6 +14,48 @@ function RegisterForm() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  // Unverified email state
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Cooldown countdown
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const handleResendVerification = async () => {
+    if (!unverifiedEmail) return;
+    setResendLoading(true);
+    setResendMessage(null);
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: unverifiedEmail }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResendMessage({ type: 'success', text: data.message });
+        setCooldown(60);
+      } else {
+        setResendMessage({ type: 'error', text: data.error || 'Gagal mengirim ulang verifikasi.' });
+      }
+    } catch {
+      setResendMessage({ type: 'error', text: 'Terjadi kesalahan jaringan. Silakan coba lagi.' });
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +72,16 @@ function RegisterForm() {
       const data = await res.json();
 
       if (!res.ok) {
+        // Handle unverified email case - show special card
+        if (data.code === 'unverified') {
+          setUnverifiedEmail(email);
+          setCooldown(data.cooldownSecs || (data.emailSent ? 60 : 0));
+          setResendMessage(data.emailSent
+            ? { type: 'success', text: 'Email verifikasi baru telah dikirim. Silakan periksa kotak masuk atau folder spam Anda.' }
+            : null
+          );
+          return;
+        }
         if (data.error === 'Validation error' && data.details) {
           const errors = data.details as Record<string, string[]>;
           const msg = Object.entries(errors)
@@ -53,6 +105,52 @@ function RegisterForm() {
       setIsLoading(false);
     }
   };
+
+  // Show unverified email card
+  if (unverifiedEmail) {
+    return (
+      <div className="w-full max-w-md bg-neutral-900/60 backdrop-blur-xl border border-amber-500/30 rounded-3xl p-8 shadow-2xl shadow-amber-500/5 text-center">
+        <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center mx-auto mb-6">
+          <MailCheck className="w-8 h-8" />
+        </div>
+        <h2 className="text-2xl font-bold text-neutral-50 mb-3">Akun Belum Diverifikasi</h2>
+        <p className="text-neutral-400 text-sm mb-2">
+          Email <span className="text-amber-400 font-medium">{unverifiedEmail}</span> sudah terdaftar, namun belum diverifikasi.
+        </p>
+        <p className="text-neutral-500 text-xs mb-6">
+          Silakan periksa kotak masuk atau folder spam Anda dan klik tautan verifikasi. Jika belum menerima email, klik tombol di bawah.
+        </p>
+
+        {resendMessage && (
+          <p className={`text-xs mb-4 ${resendMessage.type === 'success' ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {resendMessage.text}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleResendVerification}
+          disabled={resendLoading || cooldown > 0}
+          className="w-full py-3 mb-4 bg-amber-500 hover:bg-amber-400 disabled:bg-neutral-800 text-neutral-950 disabled:text-neutral-500 font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2"
+        >
+          {resendLoading ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Mengirim...</>
+          ) : cooldown > 0 ? (
+            `Kirim Ulang (${cooldown}s)`
+          ) : (
+            'Kirim Ulang Email Verifikasi'
+          )}
+        </button>
+
+        <Link
+          href="/login"
+          className="block w-full py-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-semibold rounded-xl text-sm transition-colors"
+        >
+          Kembali ke Halaman Login
+        </Link>
+      </div>
+    );
+  }
 
   if (isSuccess) {
     return (

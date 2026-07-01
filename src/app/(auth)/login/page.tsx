@@ -1,19 +1,115 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, Suspense, useEffect } from 'react';
 import { signIn, getSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Camera, Lock, Mail, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 
+const getFriendlyErrorMessage = (errorCode: string | null): string => {
+  if (!errorCode) return '';
+  switch (errorCode) {
+    case 'Configuration':
+      return 'Terjadi kesalahan konfigurasi server. Silakan hubungi administrator.';
+    case 'CredentialsSignin':
+      return 'Email atau password salah.';
+    case 'unverified_email':
+      return 'Verifikasi email Anda terlebih dahulu. Periksa kotak masuk Anda.';
+    case 'suspended_account':
+      return 'Akses ditolak. Akun Anda telah ditangguhkan.';
+    case 'AccessDenied':
+      return 'Akses ditolak. Akun Anda mungkin telah ditangguhkan atau dinonaktifkan.';
+    case 'OAuthAccountNotLinked':
+      return 'Email ini sudah terdaftar dengan metode login lain. Silakan masuk menggunakan metode pendaftaran awal Anda.';
+    case 'OAuthSignin':
+    case 'OAuthCallback':
+    case 'OAuthCreateAccount':
+    case 'Callback':
+      return 'Gagal masuk menggunakan akun Google Anda. Silakan coba kembali.';
+    default:
+      const lowerCode = errorCode.toLowerCase();
+      if (lowerCode.includes('verifikasi email') || lowerCode.includes('unverified')) {
+        return 'Verifikasi email Anda terlebih dahulu. Periksa kotak masuk Anda.';
+      }
+      if (lowerCode.includes('suspended') || lowerCode.includes('ditangguhkan')) {
+        return 'Akses ditolak. Akun Anda telah ditangguhkan.';
+      }
+      if (lowerCode.includes('email or password') || lowerCode.includes('salah')) {
+        return 'Email atau password salah.';
+      }
+      return 'Gagal masuk. Silakan periksa kembali data Anda.';
+  }
+};
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const nextParam = searchParams.get('next');
+  const callbackUrl = nextParam === 'setup-face' ? '/setup-face' : (searchParams.get('callbackUrl') || '/');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => getFriendlyErrorMessage(searchParams.get('error')));
   const [isLoading, setIsLoading] = useState(false);
+
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Load cooldown from localStorage on mount
+  useEffect(() => {
+    const savedCooldown = localStorage.getItem('resend_cooldown_expiry');
+    if (savedCooldown) {
+      const expiry = parseInt(savedCooldown, 10);
+      const remaining = Math.ceil((expiry - Date.now()) / 1000);
+      if (remaining > 0) {
+        setTimeout(() => setCooldown(remaining), 0);
+      }
+    }
+  }, []);
+
+  // Cooldown countdown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          localStorage.removeItem('resend_cooldown_expiry');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setResendMessage({ type: 'error', text: 'Silakan masukkan email Anda terlebih dahulu.' });
+      return;
+    }
+    setResendLoading(true);
+    setResendMessage(null);
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResendMessage({ type: 'success', text: data.message });
+        const expiry = Date.now() + 60000;
+        localStorage.setItem('resend_cooldown_expiry', expiry.toString());
+        setCooldown(60);
+      } else {
+        setResendMessage({ type: 'error', text: data.error || 'Gagal mengirim ulang verifikasi.' });
+      }
+    } catch {
+      setResendMessage({ type: 'error', text: 'Terjadi kesalahan jaringan. Silakan coba lagi.' });
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +124,21 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError(result.error);
+        try {
+          const verifyStatusRes = await fetch('/api/auth/verify-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password }),
+          });
+          const verifyStatusData = await verifyStatusRes.json();
+          if (verifyStatusRes.ok && verifyStatusData.unverified) {
+            setError('Verifikasi email Anda terlebih dahulu. Periksa kotak masuk Anda.');
+            return;
+          }
+        } catch (err) {
+          console.error('Verify status check failed:', err);
+        }
+        setError(getFriendlyErrorMessage(result.error));
       } else {
         // Fetch session to check role
         const sessionData = await getSession();
@@ -69,9 +179,38 @@ function LoginForm() {
       </div>
 
       {error && (
-        <div className="bg-error-bg border border-error-border text-error-text text-xs p-4 rounded-xl mb-6 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 mt-0.5" />
-          <span>{error}</span>
+        <div className="bg-error-bg border border-error-border text-error-text text-xs p-4 rounded-xl mb-6">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <div className="space-y-2 flex-1">
+              <span>{error}</span>
+              
+              {/* If it's a verification warning, show a resend button */}
+              {error.includes('Verifikasi email') && (
+                <div className="pt-2 border-t border-error-border/40 mt-2">
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendLoading || cooldown > 0}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 disabled:bg-neutral-800 text-white font-medium rounded-lg text-[10px] transition-colors shadow-sm disabled:text-neutral-500 cursor-pointer"
+                  >
+                    {resendLoading ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : cooldown > 0 ? (
+                      `Kirim Ulang (${cooldown}s)`
+                    ) : (
+                      'Kirim Ulang Email Verifikasi'
+                    )}
+                  </button>
+                  {resendMessage && (
+                    <p className={`mt-2 text-[10px] ${resendMessage.type === 'success' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {resendMessage.text}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

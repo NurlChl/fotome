@@ -65,7 +65,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     // Biometric Owner Verification (except for Admin, Superadmin, Photographer Owner, and Claimed Photos)
     if (!isBypassUser && !isClaimedPhoto) {
       const fullUser = await User.findById(session.user.id);
-      if (!fullUser || !fullUser.faceDescriptor || fullUser.faceDescriptor.length !== 128) {
+      const hasAnyFaceDescriptor = 
+        (fullUser?.faceDescriptor && fullUser.faceDescriptor.length === 128) ||
+        (fullUser?.faceDescriptorLeft && fullUser.faceDescriptorLeft.length === 128) ||
+        (fullUser?.faceDescriptorRight && fullUser.faceDescriptorRight.length === 128);
+
+      if (!fullUser || !hasAnyFaceDescriptor) {
         return NextResponse.json(
           { error: 'Biometric registration required. Please complete face recognition in your profile settings to download photos.' },
           { status: 400 }
@@ -81,16 +86,30 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         let hasMatch = false;
         let lowestDistance = Infinity;
 
+        // Construct list of user descriptors
+        const userVectors: number[][] = [];
+        if (fullUser.faceDescriptor && fullUser.faceDescriptor.length === 128) {
+          userVectors.push(fullUser.faceDescriptor);
+        }
+        if (fullUser.faceDescriptorLeft && fullUser.faceDescriptorLeft.length === 128) {
+          userVectors.push(fullUser.faceDescriptorLeft);
+        }
+        if (fullUser.faceDescriptorRight && fullUser.faceDescriptorRight.length === 128) {
+          userVectors.push(fullUser.faceDescriptorRight);
+        }
+
         for (const face of photoFaces) {
-          const dist = euclideanDistance(fullUser.faceDescriptor, face.descriptor);
-          if (dist < lowestDistance) lowestDistance = dist;
-          
-          // Check if this face matches a hard negative
-          const isHardNegative = isHardNegativeMatch(face.descriptor, hardNegatives, dist);
-          
-          // Only count as match if distance is within threshold AND not a hard negative
-          if (dist <= 0.55 && !isHardNegative) {
-            hasMatch = true;
+          for (const uVec of userVectors) {
+            const dist = euclideanDistance(uVec, face.descriptor);
+            if (dist < lowestDistance) lowestDistance = dist;
+            
+            // Check if this face matches a hard negative
+            const isHardNegative = isHardNegativeMatch(face.descriptor, hardNegatives, dist);
+            
+            // Only count as match if distance is within threshold AND not a hard negative
+            if (dist <= 0.55 && !isHardNegative) {
+              hasMatch = true;
+            }
           }
         }
 
