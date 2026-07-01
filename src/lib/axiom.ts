@@ -47,9 +47,7 @@ export async function logActivity(
     let resolvedIp = ipAddress;
     if (isLoopback(ipAddress)) {
       const publicIp = await getPublicIp();
-      if (publicIp) {
-        resolvedIp = publicIp;
-      }
+      resolvedIp = publicIp || '36.81.174.122';
     }
 
     // 1. Log to MongoDB

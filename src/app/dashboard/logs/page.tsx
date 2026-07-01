@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
-import { Activity, Database, Cloud, Eye, X } from 'lucide-react';
+import { Activity, Database, Cloud, Eye, X, Search } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface LogEntry {
   _id: string;
@@ -34,6 +35,10 @@ export default function ActivityLogsPage() {
   const [actionFilter, setActionFilter] = useState('');
   const [page, setPage] = useState(1);
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
+  // Search State
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 300);
 
   const canManageLogs = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.manageLogs;
 
@@ -134,6 +139,19 @@ export default function ActivityLogsPage() {
 
   const filteredLogs = logs.filter((log) => {
     if (actionFilter && log.action !== actionFilter) return false;
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      const name = log.userId?.name || '';
+      const email = log.userId?.email || '';
+      const details = log.details || '';
+      const ip = log.ipAddress || '';
+      if (
+        !name.toLowerCase().includes(q) &&
+        !email.toLowerCase().includes(q) &&
+        !details.toLowerCase().includes(q) &&
+        !ip.toLowerCase().includes(q)
+      ) return false;
+    }
     return true;
   });
 
@@ -195,19 +213,35 @@ export default function ActivityLogsPage() {
       <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 border-b border-neutral-900 pb-4">
           <h2 className="text-lg font-bold text-neutral-50">Audit Trail ({filteredLogs.length} events)</h2>
-          <div className="w-full sm:w-64">
-            <select
-              value={actionFilter}
-              onChange={(e) => {
-                setActionFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-neutral-300 text-sm focus:outline-none focus:border-primary-500 transition duration-200"
-            >
-              <option value="">Semua Aktivitas</option>
-              {uniqueActions.map((act) => {
-                const details = getActionDetails(act);
-                return (
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-neutral-500">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                placeholder="Cari nama, email, detail, IP..."
+                className="w-full pl-9 pr-4 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-neutral-200 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200"
+              />
+            </div>
+            
+            {/* Action Filter */}
+            <div className="w-full sm:w-56">
+              <select
+                value={actionFilter}
+                onChange={(e) => {
+                  setActionFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 bg-neutral-950 border border-neutral-900 rounded-xl text-neutral-300 text-sm focus:outline-none focus:border-primary-500 transition duration-200"
+              >
+                <option value="">Semua Aktivitas</option>
+                {uniqueActions.map((act) => {
+                  const details = getActionDetails(act);
+                  return (
                   <option key={act} value={act}>
                     [{details.category}] {details.label}
                   </option>
@@ -216,7 +250,7 @@ export default function ActivityLogsPage() {
             </select>
           </div>
         </div>
-
+        </div>
         {filteredLogs.length > 0 ? (
           <div className="overflow-x-auto border border-neutral-900 rounded-xl">
             <table className="w-full text-left text-sm border-collapse">

@@ -25,6 +25,9 @@ export default function Navbar() {
       setIsScrolled(window.scrollY > 20);
     };
 
+    // Run immediately on client-side mount to handle refreshed pages that are already scrolled
+    handleScroll();
+
     const handleClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setIsProfileOpen(false);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
-import { Category, ActivityLog } from '@/lib/db/models';
+import { Category } from '@/lib/db/models';
+import { logActivity } from '@/lib/axiom';
 import { auth } from '@/lib/auth';
 
 // Helper to check admin permission
@@ -18,7 +19,7 @@ async function checkPermission() {
   return { session };
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const authCheck = await checkPermission();
     if (authCheck.error) {
@@ -70,12 +71,12 @@ export async function POST(req: NextRequest) {
     });
 
     // Log Activity
-    await ActivityLog.create({
-      userId: authCheck.session?.user.id,
-      action: 'create_category',
-      details: `Created category: ${cleanName} (${cleanValue})`,
-      ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
-    });
+    await logActivity(
+      authCheck.session?.user.id,
+      'create_category',
+      `Created category: ${cleanName} (${cleanValue})`,
+      req.headers.get('x-forwarded-for') || '127.0.0.1'
+    );
 
     return NextResponse.json({ category: newCategory });
   } catch (error) {
@@ -126,12 +127,12 @@ export async function PUT(req: NextRequest) {
     await category.save();
 
     // Log Activity
-    await ActivityLog.create({
-      userId: authCheck.session?.user.id,
-      action: 'update_category',
-      details: `Updated category from "${oldName}" to "${cleanName}" (${cleanValue})`,
-      ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
-    });
+    await logActivity(
+      authCheck.session?.user.id,
+      'update_category',
+      `Updated category from "${oldName}" to "${cleanName}" (${cleanValue})`,
+      req.headers.get('x-forwarded-for') || '127.0.0.1'
+    );
 
     return NextResponse.json({ category });
   } catch (error) {
@@ -164,12 +165,12 @@ export async function DELETE(req: NextRequest) {
     await Category.findByIdAndDelete(id);
 
     // Log Activity
-    await ActivityLog.create({
-      userId: authCheck.session?.user.id,
-      action: 'delete_category',
-      details: `Deleted category: ${category.name} (${category.value})`,
-      ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
-    });
+    await logActivity(
+      authCheck.session?.user.id,
+      'delete_category',
+      `Deleted category: ${category.name} (${category.value})`,
+      req.headers.get('x-forwarded-for') || '127.0.0.1'
+    );
 
     return NextResponse.json({ message: 'Category deleted successfully' });
   } catch (error) {

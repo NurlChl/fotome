@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
-import { Receipt, DollarSign, Download, Eye, X, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Receipt, DollarSign, Download, Eye, X, Image as ImageIcon, ChevronLeft, ChevronRight, Search, Loader2 } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface OrderPhoto {
   _id: string;
@@ -70,16 +71,22 @@ export default function TransactionsPage() {
   const touchStartX = useRef<number>(0);
   const touchEndX = useRef<number>(0);
 
+  // Search State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const debouncedSearch = useDebounce(searchTerm, 400);
+  const initialLoadDone = useRef(false);
+
   const canManagePayouts = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.managePayouts;
 
-  async function fetchTransactions(nextPage = 1) {
+  const fetchTransactions = useCallback(async (nextPage = 1, searchVal = '') => {
     try {
       if (nextPage === 1) {
-        setIsLoading(true);
+        setIsSearching(true);
       } else {
         setIsLoadingMore(true);
       }
-      const res = await fetch(`/api/admin/transactions?page=${nextPage}&limit=50`);
+      const res = await fetch(`/api/admin/transactions?page=${nextPage}&limit=50&search=${encodeURIComponent(searchVal)}`);
       const data = await res.json();
       if (res.ok) {
         const nextPurchases = data.purchases || [];
@@ -99,8 +106,15 @@ export default function TransactionsPage() {
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
+      setIsSearching(false);
     }
-  }
+  }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    fetchTransactions(1, debouncedSearch);
+  }, [debouncedSearch, fetchTransactions]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -115,7 +129,9 @@ export default function TransactionsPage() {
       }
 
       if (canManagePayouts) {
-        fetchTransactions(1);
+        fetchTransactions(1, '').then(() => {
+          initialLoadDone.current = true;
+        });
       }
     }, 0);
 
@@ -241,8 +257,8 @@ export default function TransactionsPage() {
           </p>
         </div>
         <button
-          onClick={() => fetchTransactions(1)}
-          className="btn btn-secondary btn-sm rounded-lg text-xs"
+          onClick={() => fetchTransactions(1, debouncedSearch)}
+          className="btn btn-secondary btn-sm px-6 rounded-lg text-xs"
         >
           Refresh Data
         </button>
@@ -280,6 +296,27 @@ export default function TransactionsPage() {
 
       {/* Content */}
       <div className="bg-neutral-900/30 border border-neutral-900 rounded-2xl p-6">
+        {/* Search Bar */}
+        <div className="mb-6 flex justify-end">
+          <div className="relative w-full sm:w-80">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-neutral-500">
+              <Search className="w-4 h-4" />
+            </span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={activeSubTab === 'purchases' ? "Cari nomor order, nama, email..." : "Cari nama, email, event, IP..."}
+              className="w-full pl-9 pr-4 py-2 bg-neutral-950 border border-neutral-850 rounded-xl text-neutral-200 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200"
+            />
+            {isSearching && (
+              <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-neutral-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+              </span>
+            )}
+          </div>
+        </div>
+
         {activeSubTab === 'purchases' ? (
           purchases.length > 0 ? (
             <>
@@ -363,7 +400,7 @@ export default function TransactionsPage() {
               {purchasesHasMore && (
                 <div className="flex justify-center pt-4">
                   <button
-                    onClick={() => fetchTransactions(purchasesPage + 1)}
+                    onClick={() => fetchTransactions(purchasesPage + 1, debouncedSearch)}
                     disabled={isLoadingMore}
                     className="btn btn-secondary btn-sm rounded-lg text-xs"
                   >
@@ -390,7 +427,22 @@ export default function TransactionsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-900">
-                  {downloads.map((dl) => (
+                  {downloads
+                    .filter((dl) => {
+                      if (!debouncedSearch) return true;
+                      const q = debouncedSearch.toLowerCase();
+                      const name = dl.userId?.name || '';
+                      const email = dl.userId?.email || '';
+                      const event = dl.eventId?.title || '';
+                      const ip = dl.ipAddress || '';
+                      return (
+                        name.toLowerCase().includes(q) ||
+                        email.toLowerCase().includes(q) ||
+                        event.toLowerCase().includes(q) ||
+                        ip.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((dl) => (
                     <tr key={dl._id} className="hover:bg-neutral-900/10 text-neutral-300">
                       <td className="px-6 py-4">
                         {dl.photoId ? (

@@ -11,10 +11,12 @@ import {
   Edit2, 
   Trash2, 
   X, 
-  Loader2 
+  Loader2,
+  Search 
 } from 'lucide-react';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
 import { useConfirm } from '@/components/ModalProvider';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface CategoryData {
   _id: string;
@@ -47,6 +49,20 @@ export default function CategoriesPage() {
 
   const isSuperadmin = session?.user?.role === 'superadmin';
   const hasAccess = isSuperadmin || !!session?.user?.permissions?.manageCategories;
+
+  // Search State
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
+  const filteredCategories = debouncedSearch
+    ? categories.filter(cat => {
+        const q = debouncedSearch.toLowerCase();
+        return (
+          cat.name.toLowerCase().includes(q) ||
+          cat.value.toLowerCase().includes(q)
+        );
+      })
+    : categories;
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -235,9 +251,25 @@ export default function CategoriesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Categories List */}
         <div className="lg:col-span-2 bg-neutral-900/30 border border-neutral-900 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6 border-b border-neutral-900 pb-4">
-            <h2 className="text-lg font-bold text-neutral-50">Category List</h2>
-            <span className="badge badge-primary">{categories.length} categories</span>
+          <div className="flex flex-col md:flex-row gap-4 mb-6 pb-4 border-b border-neutral-900 justify-between items-center">
+            <div className="flex items-center justify-between w-full md:w-auto gap-4">
+              <h2 className="text-lg font-bold text-neutral-50">Category List</h2>
+              <span className="badge badge-primary">{filteredCategories.length} categories</span>
+            </div>
+            
+            {/* Search Input */}
+            <div className="relative w-full md:w-64">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-neutral-500">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari kategori..."
+                className="w-full pl-9 pr-4 py-2 bg-neutral-950 border border-neutral-850 rounded-xl text-neutral-200 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200"
+              />
+            </div>
           </div>
 
           <div className="overflow-x-auto border border-neutral-900 rounded-xl">
@@ -251,8 +283,8 @@ export default function CategoriesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-900">
-                {categories.length > 0 ? (
-                  categories.map((cat) => (
+                {filteredCategories.length > 0 ? (
+                  filteredCategories.map((cat) => (
                     <tr key={cat._id} className="hover:bg-neutral-900/10 text-neutral-300">
                       <td className="px-6 py-4 font-semibold text-neutral-50">{cat.name}</td>
                       <td className="px-6 py-4">

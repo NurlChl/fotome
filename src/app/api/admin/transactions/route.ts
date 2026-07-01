@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db/mongodb';
-import { Order, OrderItem, ActivityLog } from '@/lib/db/models';
+import { Order, OrderItem, ActivityLog, User } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -25,10 +25,28 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')));
     const skip = (page - 1) * limit;
+    
+    const search = searchParams.get('search') || '';
+    const query: Record<string, unknown> = { status: 'paid' };
 
-    // 1. Fetch Purchases grouped by Order
+    if (search) {
+      const matchedUsers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ]
+      }).select('_id').lean();
+      
+      const userIds = matchedUsers.map((u) => u._id);
+      
+      query.$or = [
+        { orderNumber: { $regex: search, $options: 'i' } },
+        { userId: { $in: userIds } }
+      ];
+    }
+
     const [paidOrders, totalPaidOrders] = await Promise.all([
-      Order.find({ status: 'paid' })
+      Order.find(query)
         .populate({
           path: 'userId',
           select: 'name email',
@@ -37,7 +55,7 @@ export async function GET(req: NextRequest) {
         .skip(skip)
         .limit(limit)
         .lean(),
-      Order.countDocuments({ status: 'paid' }),
+      Order.countDocuments(query),
     ]);
 
     const paidOrderIds = paidOrders.map((o) => o._id);

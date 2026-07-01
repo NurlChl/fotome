@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, ArrowUpRight, Edit2, Trash2 } from 'lucide-react';
+import { Loader2, ArrowUpRight, Edit2, Trash2, Search } from 'lucide-react';
 import { useConfirm } from '@/components/ModalProvider';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface EventData {
   _id: string;
@@ -38,13 +39,22 @@ export default function AllEventsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalEvents, setTotalEvents] = useState(0);
 
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categories, setCategories] = useState<{ _id: string; name: string; value: string }[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const debouncedSearch = useDebounce(searchTerm, 400);
+  const initialLoadDone = useRef(false);
+
   const isSuperadmin = session?.user?.role === 'superadmin';
   const canManageEvents = isSuperadmin || !!session?.user?.permissions?.manageEvents;
 
-  async function fetchAllEvents(p = 1) {
-    setIsLoading(true);
+  const fetchAllEvents = useCallback(async (p = 1, searchVal = '', statusVal = '', categoryVal = '') => {
+    setIsSearching(true);
     try {
-      const res = await fetch(`/api/admin/dashboard?eventsPage=${p}&eventsLimit=10`);
+      const res = await fetch(`/api/admin/dashboard?eventsPage=${p}&eventsLimit=10&eventsSearch=${encodeURIComponent(searchVal)}&eventsStatus=${statusVal}&eventsCategory=${categoryVal}`);
       const data = await res.json();
       if (res.ok) {
         setEvents(data.events || []);
@@ -56,8 +66,23 @@ export default function AllEventsPage() {
       console.error('Error fetching events:', error);
     } finally {
       setIsLoading(false);
+      setIsSearching(false);
     }
-  }
+  }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    fetchAllEvents(1, debouncedSearch, statusFilter, categoryFilter);
+  }, [debouncedSearch, fetchAllEvents, statusFilter, categoryFilter]);
+
+  const handleStatusChange = (val: string) => {
+    setStatusFilter(val);
+  };
+
+  const handleCategoryChange = (val: string) => {
+    setCategoryFilter(val);
+  };
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -82,15 +107,32 @@ export default function AllEventsPage() {
         return;
       }
 
-      timer = setTimeout(() => {
-        fetchAllEvents(1);
-      }, 0);
+      if (canManageEvents) {
+        async function loadCategories() {
+          try {
+            const res = await fetch('/api/categories');
+            const data = await res.json();
+            if (res.ok) {
+              setCategories(data.categories || []);
+            }
+          } catch (err) {
+            console.error('Error loading categories:', err);
+          }
+        }
+        loadCategories();
+
+        timer = setTimeout(() => {
+          fetchAllEvents(1, '', '', '').then(() => {
+            initialLoadDone.current = true;
+          });
+        }, 0);
+      }
     }
 
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [status, session, canManageEvents, router]);
+  }, [status, session, canManageEvents, router, fetchAllEvents]);
 
   const handleDeleteEvent = async (eventId: string, eventTitle: string) => {
     const isConfirmed = await confirm(
@@ -112,7 +154,7 @@ export default function AllEventsPage() {
 
       if (res.ok) {
         await customAlert('Success', `Event "${eventTitle}" deleted successfully!`, 'success');
-        fetchAllEvents(page);
+        fetchAllEvents(page, debouncedSearch, statusFilter, categoryFilter);
       } else {
         throw new Error(data.error || 'Failed to delete event');
       }
@@ -195,9 +237,58 @@ export default function AllEventsPage() {
 
       {/* Events Table */}
       <div className="bg-neutral-900/30 border border-neutral-800/50 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-6 border-b border-neutral-800/50 pb-4">
-          <h2 className="text-lg font-bold text-neutral-50">Platform Events</h2>
-          <span className="badge badge-primary">{totalEvents} events</span>
+        <div className="flex flex-col lg:flex-row gap-4 mb-6 pb-4 border-b border-neutral-800/50 justify-between items-center">
+          <div className="flex items-center justify-between w-full lg:w-auto gap-4">
+            <h2 className="text-lg font-bold text-neutral-50">Platform Events</h2>
+            <span className="badge badge-primary">{totalEvents} events</span>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-neutral-500">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari judul atau kategori..."
+                className="w-full pl-9 pr-4 py-2 bg-neutral-950 border border-neutral-850 rounded-xl text-neutral-200 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200"
+              />
+              {isSearching && (
+                <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-neutral-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                </span>
+              )}
+            </div>
+            
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              className="w-full sm:w-36 px-3 py-2 bg-neutral-950 border border-neutral-850 rounded-xl text-neutral-300 text-sm focus:outline-none focus:border-primary-500 transition duration-200"
+            >
+              <option value="">Semua Status</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+              <option value="archived">Archived</option>
+            </select>
+
+            {/* Category Filter */}
+            <select
+              value={categoryFilter}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              className="w-full sm:w-44 px-3 py-2 bg-neutral-950 border border-neutral-850 rounded-xl text-neutral-300 text-sm focus:outline-none focus:border-primary-500 transition duration-200"
+            >
+              <option value="">Semua Kategori</option>
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat.value}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="overflow-x-auto border border-neutral-800/50 rounded-xl">
           <table className="w-full text-left text-sm border-collapse">
@@ -286,7 +377,7 @@ export default function AllEventsPage() {
         {events.length > 0 && totalPages > 1 && (
           <div className="flex items-center justify-between pt-5 mt-4">
             <button
-              onClick={() => fetchAllEvents(page - 1)}
+              onClick={() => fetchAllEvents(page - 1, debouncedSearch, statusFilter, categoryFilter)}
               disabled={page === 1}
               className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
             >
@@ -296,7 +387,7 @@ export default function AllEventsPage() {
               Page <span className="font-semibold text-neutral-200">{page}</span> of <span className="font-semibold text-neutral-200">{totalPages}</span>
             </span>
             <button
-              onClick={() => fetchAllEvents(page + 1)}
+              onClick={() => fetchAllEvents(page + 1, debouncedSearch, statusFilter, categoryFilter)}
               disabled={page === totalPages}
               className="px-3.5 py-2 text-xs font-medium bg-neutral-950 hover:bg-neutral-900 border border-neutral-850 rounded-xl text-neutral-300 disabled:opacity-40 disabled:hover:bg-neutral-950 transition duration-150"
             >

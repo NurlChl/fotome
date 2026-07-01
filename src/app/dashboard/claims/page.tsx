@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { TableSkeleton, PageHeaderSkeleton } from '@/components/LoadingSkeleton';
-import { ShieldAlert, Eye, X, Fingerprint, Info, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { ShieldAlert, Eye, X, Fingerprint, Info, CheckCircle2, AlertTriangle, AlertCircle, Search } from 'lucide-react';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface ClaimEntry {
   _id: string;
@@ -46,6 +47,10 @@ export default function ManualClaimsPage() {
   const [selectedClaim, setSelectedClaim] = useState<ClaimEntry | null>(null);
   const [activeTab, setActiveTab] = useState<'manual' | 'ai-verified' | 'false-positive'>('manual');
 
+  // Search State
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
   const canManageUsers = session?.user?.role === 'superadmin' || !!session?.user?.permissions?.manageUsers;
 
   async function fetchClaims(nextPage = 1) {
@@ -75,19 +80,34 @@ export default function ManualClaimsPage() {
     }
   }
 
-  // Filter claims based on active tab
+  // Filter claims based on active tab + search
   const getFilteredClaims = () => {
+    let filtered: ClaimEntry[] = [];
     if (activeTab === 'manual') {
-      // Manual override claims (isMatched: false)
-      return claims.filter(c => c.isMatched === false);
+      filtered = claims.filter(c => c.isMatched === false && c.type !== 'false_positive');
     } else if (activeTab === 'ai-verified') {
-      // AI-verified claims (isMatched: true)
-      return claims.filter(c => c.isMatched === true);
+      filtered = claims.filter(c => c.isMatched === true);
     } else if (activeTab === 'false-positive') {
-      // False positive flags (type: 'false_positive')
-      return claims.filter(c => c.type === 'false_positive');
+      filtered = claims.filter(c => c.type === 'false_positive');
     }
-    return [];
+
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      filtered = filtered.filter(c => {
+        const name = c.userId?.name || '';
+        const email = c.userId?.email || '';
+        const event = c.eventId?.title || '';
+        const ip = c.ipAddress || '';
+        return (
+          name.toLowerCase().includes(q) ||
+          email.toLowerCase().includes(q) ||
+          event.toLowerCase().includes(q) ||
+          ip.toLowerCase().includes(q)
+        );
+      });
+    }
+
+    return filtered;
   };
 
   const filteredClaims = getFilteredClaims();
@@ -178,7 +198,7 @@ export default function ManualClaimsPage() {
             <span className={`text-xs px-2 py-0.5 rounded-full ${
               activeTab === 'manual' ? 'bg-white/20' : 'bg-neutral-800'
             }`}>
-              {claims.filter(c => c.isMatched === false).length}
+              {claims.filter(c => c.isMatched === false && c.type !== 'false_positive').length}
             </span>
           </button>
           
@@ -223,7 +243,8 @@ export default function ManualClaimsPage() {
         
         {/* Claims Table List */}
         <div className="xl:col-span-2 bg-neutral-900/30 border border-neutral-900 rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6 border-b border-neutral-900 pb-4">
+        <div className="flex flex-col md:flex-row gap-4 mb-6 pb-4 border-b border-neutral-900 justify-between items-center">
+          <div className="flex items-center justify-between w-full md:w-auto gap-4">
             <h2 className="text-lg font-bold text-neutral-50">
               {activeTab === 'manual' && 'Manual Claim Logs'}
               {activeTab === 'ai-verified' && 'AI-Verified Claim Logs'}
@@ -237,6 +258,27 @@ export default function ManualClaimsPage() {
               {filteredClaims.length} {activeTab === 'false-positive' ? 'flags' : 'claims'}
             </span>
           </div>
+          
+          {/* Search Input */}
+          <div className="relative w-full md:w-72">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-neutral-500">
+              <Search className="w-4 h-4" />
+            </span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Cari nama, email, event, IP..."
+              className="w-full pl-9 pr-4 py-2 bg-neutral-950 border border-neutral-850 rounded-xl text-neutral-200 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition duration-200"
+            />
+          </div>
+        </div>
+
+        {activeTab === 'false-positive' && (
+          <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-200/90 leading-relaxed animate-fadeIn">
+            💡 <strong>Informasi:</strong> Tab ini berisi log aktivitas pengguna yang menandai foto hasil deteksi pencarian wajah AI sebagai <strong>&quot;bukan foto saya&quot;</strong>. Ini berguna untuk memantau jika terjadi kesalahan pencocokan (false match) oleh sistem AI face recognition kita.
+          </div>
+        )}
 
           {filteredClaims.length > 0 ? (
             <>

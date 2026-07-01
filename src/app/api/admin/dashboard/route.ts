@@ -60,8 +60,40 @@ export async function GET(req: NextRequest) {
     const eventsPage = Math.max(1, parseInt(searchParams.get('eventsPage') || '1'));
     const eventsLimit = Math.min(100, Math.max(1, parseInt(searchParams.get('eventsLimit') || '50')));
 
+    const usersSearch = searchParams.get('usersSearch') || '';
+    const usersRole = searchParams.get('usersRole') || '';
+    const eventsSearch = searchParams.get('eventsSearch') || '';
+    const eventsStatus = searchParams.get('eventsStatus') || '';
+    const eventsCategory = searchParams.get('eventsCategory') || '';
+
     const usersSkip = (usersPage - 1) * usersLimit;
     const eventsSkip = (eventsPage - 1) * eventsLimit;
+
+    const usersQuery: Record<string, unknown> = {};
+    if (usersSearch) {
+      usersQuery.$or = [
+        { name: { $regex: usersSearch, $options: 'i' } },
+        { email: { $regex: usersSearch, $options: 'i' } }
+      ];
+    }
+    if (usersRole) {
+      usersQuery.role = usersRole;
+    }
+
+    const eventsQuery: Record<string, unknown> = {};
+    if (eventsSearch) {
+      eventsQuery.$or = [
+        { title: { $regex: eventsSearch, $options: 'i' } },
+        { slug: { $regex: eventsSearch, $options: 'i' } },
+        { category: { $regex: eventsSearch, $options: 'i' } }
+      ];
+    }
+    if (eventsStatus) {
+      eventsQuery.status = eventsStatus;
+    }
+    if (eventsCategory) {
+      eventsQuery.category = eventsCategory;
+    }
 
     // 1. Core platform metrics
     const [totalUsers, totalPhotographers, totalEvents, totalPhotos] = await Promise.all([
@@ -110,7 +142,7 @@ export async function GET(req: NextRequest) {
       : Promise.resolve([]);
 
     const usersPromise = canManageUsers
-      ? User.find({})
+      ? User.find(usersQuery)
           .select('-passwordHash')
           .sort({ createdAt: -1 })
           .skip(usersSkip)
@@ -118,7 +150,7 @@ export async function GET(req: NextRequest) {
           .lean()
       : Promise.resolve([]);
 
-    const usersTotalPromise = canManageUsers ? User.countDocuments({}) : Promise.resolve(0);
+    const usersTotalPromise = canManageUsers ? User.countDocuments(usersQuery) : Promise.resolve(0);
 
     const payoutsPromise = canManagePayouts
       ? Payout.find({ status: 'pending' })
@@ -129,7 +161,7 @@ export async function GET(req: NextRequest) {
       : Promise.resolve([]);
 
     const eventsPromise = canManageEvents
-      ? Event.find({})
+      ? Event.find(eventsQuery)
           .populate('photographerId', 'name email')
           .sort({ createdAt: -1 })
           .skip(eventsSkip)
@@ -137,7 +169,7 @@ export async function GET(req: NextRequest) {
           .lean()
       : Promise.resolve([]);
 
-    const eventsTotalPromise = canManageEvents ? Event.countDocuments({}) : Promise.resolve(0);
+    const eventsTotalPromise = canManageEvents ? Event.countDocuments(eventsQuery) : Promise.resolve(0);
 
     const [{ grossSales, platformRevenue }, payoutStats, users, usersTotal, payouts, events, eventsTotal] =
       await Promise.all([

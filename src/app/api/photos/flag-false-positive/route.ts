@@ -3,7 +3,7 @@ import connectDB from '@/lib/db/mongodb';
 import { FalsePositiveFlag } from '@/lib/db/models';
 import { auth } from '@/lib/auth';
 import { logActivity } from '@/lib/axiom';
-import { getClientIp } from '@/lib/rate-limit';
+import { getClientIpResolved } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     // Get public/client IP address
-    const ipAddress = getClientIp(req);
+    const ipAddress = await getClientIpResolved(req);
 
     // Upsert the false positive flag to prevent duplicate entries
     await FalsePositiveFlag.findOneAndUpdate(
